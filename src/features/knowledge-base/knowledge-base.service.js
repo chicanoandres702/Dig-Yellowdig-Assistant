@@ -98,6 +98,14 @@ function saveBookPage(cls, bookTitle, chapter, pageData) {
     if (!ok) {
         alert('Knowledge base storage full – some pages may have been discarded.');
     }
+    // Emit a DOM event when a book page is successfully saved so callers (eg. auto-scan)
+    // can wait for this event instead of busy-polling localStorage.
+    try {
+        if (ok && typeof window !== 'undefined' && window && window.dispatchEvent) {
+            const newCount = kb[cls] && kb[cls][bookTitle] ? kb[cls][bookTitle].length : 0;
+            window.dispatchEvent(new CustomEvent('DIG_BOOKPAGE_SAVED', { detail: { cls, bookTitle, count: newCount, ts: Date.now() } }));
+        }
+    } catch (e) { /* ignore */ }
 }
 
 function getBookPageCount(cls, bookTitle) {

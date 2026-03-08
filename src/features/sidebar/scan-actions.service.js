@@ -29,7 +29,7 @@ function pollForBookContent(container, onReport) {
             });
             setTimeout(() => { chrome.runtime.onMessage.removeListener(msgHandler); }, 2000);
         }
-    }, 100); // after 100ms, send explicit broadcast if no content yet
+    }, 40); // after 40ms, send explicit broadcast if no content yet (faster fallback)
 
     function cleanup() {
         clearTimeout(timer);
@@ -62,6 +62,9 @@ function startAutoScan(container) {
     let _lastNavTime = 0;
     let currentPageNum = null; // shared across iterations for iframe selection
     let navInProgress = false; // guard used by navigateNext
+    // Tunable parameters (can be overridden via localStorage for testing)
+    const NAV_COOLDOWN_MS = parseInt(localStorage.getItem('dig_auto_scan_nav_cooldown') || '700', 10);
+    const ATTEMPT_TIMEOUT_MS = parseInt(localStorage.getItem('dig_auto_scan_attempt_timeout') || '500', 10);
 
     // roman numeral helpers used when the page field shows xiii, iv, etc.
     const romanToInt = (r) => {
@@ -158,7 +161,8 @@ function startAutoScan(container) {
         const p = document.getElementById('dig-scan-preview');
         if (!p) return;
         let tries = 0;
-        while (tries < 20) {
+        // reduce max wait to improve throughput; should still be long enough for typical pages
+        while (tries < 10) {
             const txt = p.innerText || '';
             if (txt.trim().length > 5 && !txt.toLowerCase().includes('searching frames')) break;
             await new Promise(r => setTimeout(r, 100));
@@ -184,11 +188,11 @@ function startAutoScan(container) {
         if (!canNavigateNow()) return;
         if (navInProgress) return; // prevent double presses
         navInProgress = true;
-        // 1.5‑second cooldown between arrow dispatches
+        // cooldown between arrow dispatches (tunable)
         const now = Date.now();
         const diff = now - _lastNavTime;
-        if (diff < 1500) {
-            await new Promise(r => setTimeout(r, 1500 - diff));
+        if (diff < NAV_COOLDOWN_MS) {
+            await new Promise(r => setTimeout(r, NAV_COOLDOWN_MS - diff));
         }
         try {
             // Prefer clicking a native "next" control in the reader frame if present,
@@ -340,7 +344,8 @@ function startAutoScan(container) {
                 // mirror to preview for user feedback
                 updatePreviewBox(text || html);
                 digLog(`Page ${pageCount} saved (page ${page || 'unknown'}) url=${url || window.location.href}`);
-                if (!resolved) { resolved = true; resolveCapture(); }
+                // resolve the capture promise (guard against multiple calls)
+                if (typeof resolveCapture === 'function') { try { resolveCapture(); } catch (e) { } resolveCapture = null; }
             }
         };
 
@@ -380,9 +385,9 @@ function startAutoScan(container) {
 
         // attempt capture up to maxAttempts, abort early if page changes
         let newPageNum = currentPageNum;
-        const maxAttempts = 3;
+        const maxAttempts = 2; // reduce attempts to improve throughput
         for (let attempt = 1; attempt <= maxAttempts && !captured && isAutoScanning; attempt++) {
-            const timeoutPromise = new Promise(r => setTimeout(r, 800));
+            const timeoutPromise = new Promise(r => setTimeout(r, ATTEMPT_TIMEOUT_MS));
             await Promise.race([capturePromise, timeoutPromise]);
 
             // read page again to detect manual advance
@@ -398,13 +403,11 @@ function startAutoScan(container) {
                 break;
             }
             if (attempt < maxAttempts) {
-                // reattach listeners and ask again
-                if (chrome && chrome.runtime) chrome.runtime.onMessage.addListener(handler);
-                window.addEventListener('DIG_FRAME_CONTENT', localHandler);
+                // ask frames again but don't reattach listeners (they are already active)
                 if (chrome && chrome.runtime && chrome.runtime.id) {
                     chrome.runtime.sendMessage({ type: 'BROADCAST_TO_FRAMES', customSelector: customSel, includeImages: incImg });
                 }
-                await new Promise(r => setTimeout(r, 200));
+                await new Promise(r => setTimeout(r, 100));
             }
         }
 
@@ -420,12 +423,32 @@ function startAutoScan(container) {
         }
         if (!isAutoScanning) return;
 
-        // ensure saved count increases before we navigate away
-        let newCount = prevSavedCount;
-        while (isAutoScanning && newCount <= prevSavedCount) {
-            await new Promise(r => setTimeout(r, 100));
-            newCount = getBookPageCount(detectedClass, bookTitle);
-        }
+        // wait for saved count to increase (listen for event emitted by saveBookPage)
+        const waitForSavedCountIncrease = (prev, cls, title, timeoutMs = 3000) => new Promise(resolve => {
+            try {
+                if (getBookPageCount(cls, title) > prev) return resolve(true);
+            } catch (e) { }
+            let resolved = false;
+            const onSave = (ev) => {
+                try {
+                    const d = ev.detail || {};
+                    if (d && d.cls === cls && d.bookTitle === title) {
+                        resolved = true;
+                        window.removeEventListener('DIG_BOOKPAGE_SAVED', onSave);
+                        return resolve(true);
+                    }
+                } catch (e) { }
+            };
+            window.addEventListener('DIG_BOOKPAGE_SAVED', onSave);
+            setTimeout(() => {
+                if (!resolved) {
+                    window.removeEventListener('DIG_BOOKPAGE_SAVED', onSave);
+                    resolve(false);
+                }
+            }, timeoutMs);
+        });
+
+        await waitForSavedCountIncrease(prevSavedCount, detectedClass, bookTitle, 3000);
         if (!isAutoScanning) return; // stopped mid-wait
         // verify that saves match nav count
 
@@ -445,14 +468,15 @@ function startAutoScan(container) {
         const onNav = () => { navigated = true; };
         window.addEventListener('DIG_PAGE_CHANGED', onNav, { once: true });
         let navWait = 0;
-        while (isAutoScanning && !navigated && navWait < 1000) {
+        // shorten nav wait to improve throughput while still allowing SPA updates
+        while (isAutoScanning && !navigated && navWait < 800) {
             await new Promise(r => setTimeout(r, 50));
             navWait += 50;
         }
         window.removeEventListener('DIG_PAGE_CHANGED', onNav);
 
         if (isAutoScanning) {
-            await new Promise(r => setTimeout(r, 50));
+            await new Promise(r => setTimeout(r, 20));
             scanNext();
         }
     };

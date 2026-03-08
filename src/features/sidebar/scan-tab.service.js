@@ -127,6 +127,30 @@ function renderBookScanTab(container) {
     // initial state
     updateSaveState();
   }
+  // Quick attempt: try to fetch content immediately (no images) to populate preview faster
+  if (isEmpty) {
+    (async () => {
+      try {
+        const timeout = parseInt(localStorage.getItem('dig_preview_quick_timeout') || '300', 10);
+        let data = null;
+        try {
+          const p = getVitalSourcePageText(undefined, false); // no images for speed
+          data = (p instanceof Promise) ? await Promise.race([p, new Promise(r => setTimeout(() => r(null), timeout))]) : p;
+        } catch (e) { data = null; }
+        if (data && ((data.text && data.text.length >= 5) || data.html || data.page != null)) {
+          const previewEl = document.getElementById('dig-scan-preview');
+          const saveBtn = document.getElementById('dig-book-save');
+          const text = (typeof data === 'object' ? data.text : data) || '';
+          if (previewEl) {
+            const hasImages = text.includes('![');
+            const textPreview = escapeHtml(text.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 160));
+            previewEl.innerHTML = `<p style="font-size:11px;color:#334155;">${textPreview}${hasImages ? ' <b style="color:#10b981;">[+Images]</b>' : ''}...</p>`;
+          }
+          if (saveBtn) { saveBtn.disabled = false; saveBtn.activeData = data; }
+        }
+      } catch (e) { }
+    })();
+  }
   if (document.getElementById('dig-book-reset')) document.getElementById('dig-book-reset').onclick = () => { localStorage.removeItem('dig_custom_reader_selector'); renderBookScanTab(container); };
 
   document.getElementById('dig-book-save').onclick = async () => {

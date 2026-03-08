@@ -113,7 +113,7 @@ if (isVitalSourcePage()) {
           }
         }
       } catch (e) { /* ignore */ }
-    }, 200);
+    }, 80);
     const mo2 = new MutationObserver(throttled);
     mo2.observe(readerEl, { childList: true, subtree: true, characterData: true });
 

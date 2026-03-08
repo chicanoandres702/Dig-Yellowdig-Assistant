@@ -33,8 +33,8 @@ async function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
     }
 
     // helper: wait until element text grows before returning
-    // wait until the element has enough text; low timeout for speed
-    async function waitForContent(el, minLength = 20, timeout = 500) {
+    // wait until the element has enough text; lower timeout for speed
+    async function waitForContent(el, minLength = 20, timeout = 250) {
         if (!el) return false;
         const check = () => (el.innerText || '').trim().length >= minLength;
         if (check()) return true;
@@ -62,7 +62,7 @@ async function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
             const el = document.querySelector(s);
             if (el) {
                 // make sure the found element actually has text (page might still be loading)
-                const ready = await waitForContent(el, isCoverPage ? 1 : 20, 500);
+                const ready = await waitForContent(el, isCoverPage ? 1 : 20, 250);
                 if (!ready) continue;
             }
             if (el && (el.innerText?.trim().length >= 20 || isCoverPage)) {
