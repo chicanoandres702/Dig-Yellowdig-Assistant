@@ -23,9 +23,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (!tid) return;
             chrome.scripting.executeScript({
                 target: { tabId: tid, allFrames: true },
-                func: (sel, incImg) => {
+                func: async (sel, incImg) => {
                     if (typeof getVitalSourcePageText === 'function') {
-                        const data = getVitalSourcePageText(sel, incImg);
+                        const data = await getVitalSourcePageText(sel, incImg);
                         if (data) {
                             const text = typeof data === 'object' ? data.text : data;
                             const html = typeof data === 'object' ? data.html : '';

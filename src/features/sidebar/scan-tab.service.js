@@ -31,13 +31,24 @@ function renderScanTab(container) {
 
 function renderBookScanTab(container) {
   const bookTitle = getBookTitle(), chapter = detectVitalSourceChapter();
-  const pageTextData = getVitalSourcePageText(), savedCount = getBookPageCount(detectedClass, bookTitle);
-  const pageText = typeof pageTextData === 'object' ? pageTextData.text : (pageTextData || '');
-  const isEmpty = pageText.length < 20;
+  const savedCount = getBookPageCount(detectedClass, bookTitle);
+
+  // pageTextData might be a Promise now
+  const result = getVitalSourcePageText();
+  let pageText = '';
+
+  // If it's a promise, it's definitely empty synchronously
+  if (result instanceof Promise) {
+    pageText = '';
+  } else {
+    pageText = typeof result === 'object' ? (result?.text || '') : (result || '');
+  }
+
+  const isEmpty = !pageText || pageText.length < 20;
 
   if (isEmpty) pollForBookContent(container, (data) => {
     const preview = document.getElementById('dig-scan-preview');
-    const text = typeof data === 'object' ? data.text : data;
+    const text = (typeof data === 'object' ? data.text : data) || '';
     if (preview) {
       const hasImages = text.includes('![');
       const textPreview = escapeHtml(text.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 160));
@@ -57,7 +68,7 @@ function renderBookScanTab(container) {
       <button id="dig-view-full" style="background:none;border:none;color:${PRIMARY_COLOR};cursor:pointer;font-size:10px;padding:0;">🔍 View Full Content</button>
     </div>
     <div id="dig-scan-preview" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px;margin-bottom:8px;max-height:80px;overflow:hidden;">
-      <p style="font-size:11px;color:#334155;line-height:1.4;margin:0;">${isEmpty ? '<i>Searching frames...</i>' : escapeHtml((typeof pageText === 'object' ? pageText.text : pageText).replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 200) + '...')}</p>
+      <p style="font-size:11px;color:#334155;line-height:1.4;margin:0;">${isEmpty ? '<i>Searching frames...</i>' : escapeHtml(pageText.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 200) + '...')}</p>
     </div>
     <div style="margin-bottom:8px;">
       <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#475569;cursor:pointer;">

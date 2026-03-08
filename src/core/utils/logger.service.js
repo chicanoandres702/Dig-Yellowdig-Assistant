@@ -8,7 +8,13 @@ function digLog(msg, data = null) {
         msg,
         data: data ? JSON.parse(JSON.stringify(data)) : null
     };
-    chrome.runtime.sendMessage({ type: 'DIG_DEBUG_LOG', log });
+    try {
+        if (chrome.runtime && chrome.runtime.id) {
+            chrome.runtime.sendMessage({ type: 'DIG_DEBUG_LOG', log });
+        }
+    } catch (e) {
+        // Context invalidated or other error
+    }
     console.log(`[Dig Assistant] ${msg}`, data || '');
 }
 

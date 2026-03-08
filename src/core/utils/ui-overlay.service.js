@@ -7,7 +7,7 @@ function showFullPreview(title, content) {
 
     // Process markdown-like images for display
     const htmlContent = content
-        .replace(/!\[(.*?)\]\((.*?)\)/g, '<div style="margin:10px 0;text-align:center;"><img src="$2" alt="$1" style="max-width:100%;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.1);"><p style="font-size:10px;color:#666;margin:4px 0 0;">$1</p></div>')
+        .replace(/!\[(.*?)\]\((.*?)\)/g, '<div style="margin:16px 0;text-align:center;"><img src="$2" alt="$1" style="max-width:100%;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15); display:block; margin:0 auto;"></div>')
         .replace(/\n/g, '<br>');
 
     overlay.innerHTML = `

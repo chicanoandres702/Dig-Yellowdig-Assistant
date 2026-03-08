@@ -76,8 +76,10 @@ window.addEventListener('popstate', () => {
 // Messaging for frame content extraction
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'GET_SCAN_CONTENT' && isVitalSourcePage()) {
-    const data = getVitalSourcePageText();
-    sendResponse(typeof data === 'object' ? data : { text: data, html: '' });
+    getVitalSourcePageText().then(data => {
+      sendResponse(typeof data === 'object' ? data : { text: data, html: '' });
+    });
+    return true; // Keep channel open for async response
   }
 });
 
