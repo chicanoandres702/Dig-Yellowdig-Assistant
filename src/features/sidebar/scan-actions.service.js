@@ -542,6 +542,8 @@ function startAutoScan(container) {
         let lastSig = lastTextSig;
         let resolveCapture;
         const capturePromise = new Promise(r => { resolveCapture = r; });
+        // observer handle for preview-based auto-save (per-iteration)
+        let previewObserver = null;
 
         const processData = (text, html, page, url) => {
             if (captured || !isAutoScanning) return;
@@ -627,6 +629,29 @@ function startAutoScan(container) {
             chrome.runtime.sendMessage({ type: 'BROADCAST_TO_FRAMES', customSelector: customSel, includeImages: incImg });
         }
 
+        // MutationObserver: watch the preview box and auto-save when it receives meaningful content.
+        try {
+            const pbox = document.getElementById('dig-scan-preview');
+            if (pbox) {
+                const checkAndMaybeSavePreview = () => {
+                    if (!isAutoScanning || captured) return;
+                    try {
+                        const txt = pbox.innerText || '';
+                        const flagged = pbox.dataset && pbox.dataset.digHasContent === '1';
+                        if (flagged || !isPreviewPlaceholder(txt)) {
+                            // Delegate to the same processData flow to keep deduplication and save semantics
+                            processData(txt, pbox.innerHTML || '', null, null);
+                            if (previewObserver) { try { previewObserver.disconnect(); } catch (e) { } previewObserver = null; }
+                        }
+                    } catch (e) { /* ignore */ }
+                };
+                previewObserver = new MutationObserver(checkAndMaybeSavePreview);
+                previewObserver.observe(pbox, { childList: true, subtree: true, characterData: true });
+                // immediate check in case preview already had content
+                checkAndMaybeSavePreview();
+            }
+        } catch (e) { /* ignore */ }
+
         // attempt immediate capture of current page without waiting for messages
         if (typeof getVitalSourcePageText === 'function' && !captured) {
             try {
@@ -671,6 +696,7 @@ function startAutoScan(container) {
 
         if (chrome && chrome.runtime) chrome.runtime.onMessage.removeListener(handler);
         window.removeEventListener('DIG_FRAME_CONTENT', localHandler);
+        try { if (previewObserver) { previewObserver.disconnect(); previewObserver = null; } } catch (e) { }
 
         if (!captured && isAutoScanning) {
             const chapter = detectVitalSourceChapter();
