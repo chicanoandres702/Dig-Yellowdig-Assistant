@@ -1,0 +1,75 @@
+{
+  "manifest_version": 3,
+  "name": "Dig - Academic Research Assistant",
+  "version": "2.1",
+  "description": "An AI-powered sociology assistant for reflections and peer responses on Yellowdig.",
+  "icons": {
+    "128": "icon.png"
+  },
+  "permissions": [
+    "storage",
+    "clipboardWrite",
+    "scripting"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "https://*.yellowdig.app/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://*.capella.edu/*",
+    "https://*.vitalsource.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Dig Assistant Settings"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.yellowdig.app/*",
+        "https://*.capella.edu/*",
+        "https://*.vitalsource.com/*"
+      ],
+      "js": [
+        "jsPDF.min.js",
+        "src/core/config/setup.config.js",
+        "src/core/utils/storage.service.js",
+        "src/core/utils/logger.service.js",
+        "src/core/utils/ui-overlay.service.js",
+        "src/features/content-gatherer/vitalsource-detector.service.js",
+        "src/features/content-gatherer/content-gatherer.service.js",
+        "src/features/ai-assistant/ai-assistant.service.js",
+        "src/features/knowledge-base/knowledge-base.service.js",
+        "src/features/sticky-notes/sticky-notes.service.js",
+        "src/features/sidebar/element-picker.service.js",
+        "src/features/sidebar/scan-utils.service.js",
+        "src/features/sidebar/scan-actions.service.js",
+        "src/features/sidebar/scan-tab.service.js",
+        "src/features/sidebar/pdf-v2-export.service.js",
+        "src/features/sidebar/html-export.service.js",
+        "src/features/sidebar/debug-tab.service.js",
+        "src/features/sidebar/draft-utils.service.js",
+        "src/features/sidebar/draft-tab.service.js",
+        "src/features/sidebar/sidebar-panel.service.js",
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icon.png",
+        "jsPDF.min.js",
+        "src/features/sidebar/metadata-sniffer.js"
+      ],
+      "matches": [
+        "https://*.yellowdig.app/*",
+        "https://*.capella.edu/*",
+        "https://*.vitalsource.com/*"
+      ]
+    }
+  ]
+}
