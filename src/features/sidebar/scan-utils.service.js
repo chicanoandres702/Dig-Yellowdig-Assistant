@@ -1,12 +1,9 @@
 /**
  * Scan Utilities: Surgical content extraction for VitalSource and standard pages.
  */
-function getVitalSourcePageText(overrideSelector) {
+function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
     const custom = overrideSelector || localStorage.getItem('dig_custom_reader_selector');
-    const includeImages = localStorage.getItem('dig_include_images') === 'true';
-    const images = includeImages ? getImagesAsMarkdown() : '';
-
-    let text = '', html = '';
+    const includeImages = forceIncludeImages !== undefined ? forceIncludeImages : (localStorage.getItem('dig_include_images') === 'true');
 
     if (custom) {
         digLog(`Using custom selector: ${custom}`);
@@ -14,20 +11,22 @@ function getVitalSourcePageText(overrideSelector) {
             const el = document.querySelector(custom);
             if (el) {
                 const inner = el.tagName === 'IFRAME' ? el.contentDocument?.body : el;
-                text = (inner?.innerText || '').trim();
-                html = (inner?.innerHTML || '').trim();
-                if (text.length > 10) return { text: text + images, html };
+                if (inner) return {
+                    text: extractOrderedContent(inner, includeImages),
+                    html: inner.innerHTML
+                };
             }
         } catch (e) { digLog(`Selector Error: ${e.message}`); }
     }
 
-    // Silence shells
+    // Silence redundant shells
     const iframes = document.querySelectorAll('iframe');
     for (const f of iframes) {
         try {
             const r = f.getBoundingClientRect();
             if (r.width > window.innerWidth * 0.8 && r.height > window.innerHeight * 0.8) {
-                const uniqueText = document.body.innerText.length - (f.contentDocument?.body?.innerText?.length || 0);
+                const contentText = f.contentDocument?.body?.innerText || '';
+                const uniqueText = Math.abs(document.body.innerText.length - contentText.length);
                 if (uniqueText < 100 && !document.querySelector('img') && !custom) return '';
             }
         } catch (e) { }
@@ -38,23 +37,37 @@ function getVitalSourcePageText(overrideSelector) {
         for (const s of selectors) {
             const el = document.querySelector(s);
             if (el && el.innerText?.trim().length >= 20) {
-                return { text: el.innerText.trim().substring(0, 15000), html: el.innerHTML };
+                return {
+                    text: extractOrderedContent(el, includeImages).substring(0, 15000),
+                    html: el.innerHTML
+                };
             }
         }
-        const bodyText = document.body.innerText.split('\n').filter(l => l.trim().length > 10).join('\n').substring(0, 15000);
-        return { text: bodyText + images, html: document.body.innerHTML };
     }
     return '';
 }
 
-function getImagesAsMarkdown() {
-    let md = '';
-    document.querySelectorAll('img').forEach(img => {
-        if (img.width < 50 || img.height < 50) return;
-        const src = img.src, alt = img.alt || 'Image';
-        md += `\n\n![${alt}](${src})\n`;
-    });
-    return md;
+function extractOrderedContent(root, includeImages) {
+    let result = '';
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null, false);
+    let node = walker.nextNode();
+
+    while (node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            const val = node.nodeValue.trim();
+            if (val) result += val + ' ';
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            if (node.tagName === 'BR' || node.tagName === 'P' || node.tagName === 'DIV' || node.tagName === 'LI') {
+                result += '\n';
+            } else if (includeImages && node.tagName === 'IMG') {
+                if (node.width >= 50 && node.height >= 50) {
+                    result += `\n\n![${node.alt || 'Image'}](${node.src})\n\n`;
+                }
+            }
+        }
+        node = walker.nextNode();
+    }
+    return result.replace(/\n\s*\n/g, '\n\n').trim();
 }
 
 

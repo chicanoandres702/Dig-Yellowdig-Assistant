@@ -11,7 +11,8 @@ function pollForBookContent(container, onReport) {
     chrome.runtime.onMessage.addListener(handler);
     chrome.runtime.sendMessage({
         type: 'BROADCAST_TO_FRAMES',
-        customSelector: localStorage.getItem('dig_custom_reader_selector')
+        customSelector: localStorage.getItem('dig_custom_reader_selector'),
+        includeImages: localStorage.getItem('dig_include_images') === 'true'
     });
     setTimeout(() => chrome.runtime.onMessage.removeListener(handler), 5000);
 }

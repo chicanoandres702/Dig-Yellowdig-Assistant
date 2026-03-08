@@ -34,6 +34,17 @@ function exportToHTML(title, contentArray) {
         const timestamp = item.ts ? new Date(item.ts).toLocaleString() : 'Date Unknown';
         const chapter = item.chapter || 'Chapter Unknown';
 
+        // Clean the HTML: Remove VitalSource anti-view garbage
+        let cleanHtml = item.html || item.text.replace(/\n/g, '<br>');
+        if (item.html) {
+            // Remove the body{visibility:hidden} style
+            cleanHtml = cleanHtml.replace(/<style.*?body\{visibility:hidden.*?<\/style>/gi, '');
+            // Remove the eval scripts that often handle DRM or hiding
+            cleanHtml = cleanHtml.replace(/<script.*?>eval\(.*?<\/script>/gi, '');
+            // Remove other VitalSource specific scripts
+            cleanHtml = cleanHtml.replace(/<script.*?vst.js.*?<\/script>/gi, '');
+        }
+
         html += `
         <div class="page-capture">
             <div class="page-header">
@@ -41,7 +52,7 @@ function exportToHTML(title, contentArray) {
                 <span>Captured: ${timestamp}</span>
             </div>
             <div class="capture-body">
-                ${item.html || item.text.replace(/\n/g, '<br>')}
+                ${cleanHtml}
             </div>
         </div>`;
     });

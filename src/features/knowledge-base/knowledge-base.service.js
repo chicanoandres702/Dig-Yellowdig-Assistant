@@ -36,10 +36,11 @@ function renderKBClassItems(div, kb, cls, root) {
             html += `<div style="display:flex;justify-content:space-between;align-items:center;padding-left:14px;margin-bottom:8px;">
                 <p style="font-size:11px;color:#666;margin:0;">Captured ${items.length} pages</p>
                 <div style="display:flex;gap:4px;">
-                    <button class="dig-kb-export-book" data-cls="${cls}" data-topic="${topic}" style="background:#10b981;color:white;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:10px;">📥 PDF</button>
-                    <button class="dig-kb-delete-topic" data-cls="${cls}" data-topic="${topic}" style="background:#ef4444;color:white;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:10px;">🗑️ Delete</button>
-                </div>
-            </div>`;
+                      <button class="dig-kb-export-html" data-class="${cls}" data-book="${topic}" style="background:#3b82f6;color:white;border:none;border-radius:4px;padding:4px 8px;font-size:10px;cursor:pointer;">📥 HTML</button>
+                      <button class="dig-kb-export" data-class="${cls}" data-book="${topic}" style="background:${PRIMARY_COLOR};color:white;border:none;border-radius:4px;padding:4px 8px;font-size:10px;cursor:pointer;">📥 PDF</button>
+                      <button class="dig-kb-delete-book" data-class="${cls}" data-book="${topic}" style="background:#ef4444;color:white;border:none;border-radius:4px;padding:4px 8px;font-size:10px;cursor:pointer;">🗑️ Delete</button>
+                    </div>
+                  </div>`;
 
             // Group by chapter
             const chapters = {};
