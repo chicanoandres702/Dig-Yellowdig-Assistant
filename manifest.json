@@ -32,6 +32,7 @@
         "https://*.vitalsource.com/*"
       ],
       "js": [
+        "html2canvas.min.js",
         "jsPDF.min.js",
         "src/core/config/setup.config.js",
         "src/core/utils/storage.service.js",
@@ -64,6 +65,7 @@
     {
       "resources": [
         "icon.png",
+        "html2canvas.min.js",
         "jsPDF.min.js",
         "src/features/sidebar/metadata-sniffer.js"
       ],

@@ -9,7 +9,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'DIG_DEBUG_LOG') {
         logBuffer.push(request.log);
         if (logBuffer.length > 50) logBuffer.shift();
-        chrome.tabs.sendMessage(tabId, { type: 'NEW_LOG_EVENT', log: request.log });
+        if (tabId) {
+            chrome.tabs.sendMessage(tabId, { type: 'NEW_LOG_EVENT', log: request.log }).catch(() => { });
+        }
     }
 
     if (request.type === 'GET_DEBUG_LOGS') {
@@ -58,7 +60,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.type === 'DIG_ELEMENT_SELECTED' || request.type === 'FRAME_CONTENT_REPORT') {
-        chrome.tabs.sendMessage(tabId, request);
+        if (tabId) {
+            chrome.tabs.sendMessage(tabId, request).catch(() => { });
+        }
     }
 
     if (request.type === 'FETCH_IMAGE_AS_BASE64') {

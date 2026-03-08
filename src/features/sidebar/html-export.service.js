@@ -23,10 +23,12 @@ function exportToHTML(title, contentArray) {
         @media print {
             body { background: white; margin: 0; padding: 0; }
             .page-capture { box-shadow: none; border: none; page-break-after: always; margin: 0; padding: 20px; }
+            .no-print { display: none !important; }
         }
     </style>
 </head>
 <body>
+    <button onclick="window.print()" class="no-print" style="position:fixed;top:20px;right:20px;padding:10px 20px;background:#10b981;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold;box-shadow:0 2px 4px rgba(0,0,0,0.1);z-index:9999;">Export to PDF</button>
     <h1>${escapeHtml(title)}</h1>
     <div id="content">`;
 
