@@ -8,7 +8,7 @@ window.detectedWeek = 'Week 1';
 const PRIMARY_COLOR = '#10b981';
 const DARK_COLOR = '#064e3b';
 const GEMINI_MODEL = 'gemini-flash-latest';
-const DEFAULT_API_KEY = 'AIzaSyC32EIrroE6ieYzVT6K4H-m8COGKhPcZsQ';
+const DEFAULT_API_KEY = '';
 
 const ACADEMIC_SYSTEM_PROMPT = `YOU ARE: Victoria's Academic Social Work Assistant (The Informal, Practical, Hyper-Vigilant Tutor).
 GREETING: Always address the user as "Victoria Alethia Enciso".

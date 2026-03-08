@@ -63,6 +63,8 @@ new MutationObserver(() => {
     digLog('Navigation detected: ' + lastUrl);
     updateContext();
     if (typeof refreshSidebar === 'function') refreshSidebar();
+    // Dispatch event for auto-scan loop
+    window.dispatchEvent(new CustomEvent('DIG_PAGE_CHANGED', { detail: { url: lastUrl } }));
   }
 }).observe(document, { subtree: true, childList: true });
 

@@ -19,8 +19,19 @@ function saveBookPage(cls, bookTitle, chapter, pageData) {
     if (!kb[cls][bookTitle]) kb[cls][bookTitle] = [];
 
     const { text, html } = typeof pageData === 'object' ? pageData : { text: pageData, html: '' };
-    kb[cls][bookTitle].push({ text, html, type: 'book-page', chapter, ts: Date.now() });
+    if (!text || text.length < 20) return;
 
+    // Simple de-duplication: check against last entry
+    const entries = kb[cls][bookTitle];
+    if (entries.length > 0) {
+        const last = entries[entries.length - 1];
+        if (last.text.substring(0, 200) === text.substring(0, 200)) {
+            digLog('Duplicate content detected, skipping save.');
+            return;
+        }
+    }
+
+    kb[cls][bookTitle].push({ text, html, type: 'book-page', chapter, ts: Date.now() });
     localStorage.setItem('digKnowledgeBase', JSON.stringify(kb));
 }
 
