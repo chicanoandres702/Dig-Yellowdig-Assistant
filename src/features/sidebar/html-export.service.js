@@ -15,14 +15,28 @@ function exportToHTML(title, contentArray) {
     <title>${escapeHtml(title)}</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 20px; background: #f4f7f6; }
-        .page-capture { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 40px; position: relative; }
+        .page-capture { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 40px; position: relative; /* do not allow printer to split one capture across pages */
+            page-break-inside: avoid; break-inside: avoid;
+            /* ensure each capture starts on new sheet when printing */
+            page-break-before: always;
+        }
+        .page-capture:first-child { page-break-before: auto; }
+        @media print {
+            body { background: white; margin: 0; padding: 0; }
+            .page-capture { box-shadow: none; border: none; page-break-after: always; page-break-inside: avoid; break-inside: avoid; margin: 0; padding: 20px; }
+            .page-capture:last-child { page-break-after: auto; }
+            .page-footer { border-top:1px solid #eee; margin-top:20px; padding-top:10px; font-size:11px; color:#666; display:flex; justify-content:space-between; }
+            .no-print { display: none !important; }
+        }
         .page-header { border-bottom: 1px solid #eee; margin-bottom: 20px; padding-bottom: 10px; color: #666; font-size: 13px; display: flex; justify-content: space-between; }
         .capture-title { color: #10b981; font-weight: bold; }
         h1 { text-align: center; color: #064e3b; margin-bottom: 50px; }
         img { max-width: 100%; height: auto; border-radius: 4px; display: block; margin: 20px 0; }
+        .page-footer { border-top:1px solid #eee; margin-top:20px; padding-top:10px; font-size:11px; color:#666; display:flex; justify-content:space-between; }
         @media print {
             body { background: white; margin: 0; padding: 0; }
-            .page-capture { box-shadow: none; border: none; page-break-after: always; margin: 0; padding: 20px; }
+            .page-capture { box-shadow: none; border: none; page-break-after: always; page-break-inside: avoid; break-inside: avoid; margin: 0; padding: 20px; }
+            .page-footer { border-top:1px solid #eee; margin-top:20px; padding-top:10px; font-size:11px; color:#666; display:flex; justify-content:space-between; }
             .no-print { display: none !important; }
         }
     </style>
@@ -41,6 +55,8 @@ function exportToHTML(title, contentArray) {
 
         // Clean the HTML: Remove VitalSource anti-view garbage
         let cleanHtml = item.html || item.text.replace(/\n/g, '<br>');
+        // remove any saved page-break sentinel from the content
+        cleanHtml = cleanHtml.replace(/---PAGE BREAK---/g, '');
         if (item.html) {
             // Remove the body{visibility:hidden} style
             cleanHtml = cleanHtml.replace(/<style.*?body\{visibility:hidden.*?<\/style>/gi, '');
@@ -50,6 +66,8 @@ function exportToHTML(title, contentArray) {
             cleanHtml = cleanHtml.replace(/<script.*?vst.js.*?<\/script>/gi, '');
         }
 
+        // determine page display number: prefer explicit saved page value, otherwise sequential index
+        const displayNum = item.page != null ? item.page : (index + 1);
         html += `
         <div class="page-capture">
             <div class="page-header">
@@ -59,7 +77,14 @@ function exportToHTML(title, contentArray) {
             <div class="capture-body">
                 ${cleanHtml}
             </div>
+            <div class="page-footer">
+                <span>${escapeHtml(chapter)}</span><span>Page ${escapeHtml(displayNum.toString())}</span>
+            </div>
         </div>`;
+        if (index < sorted.length - 1) {
+            html += `
+        <div style="page-break-after: always;">&nbsp;</div>`;
+        }
     });
 
     html += `

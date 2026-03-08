@@ -76,6 +76,12 @@ function renderBookScanTab(container) {
         Include Images in Scan
       </label>
     </div>
+    <div style="margin-bottom:8px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#475569;cursor:pointer;">
+        <input type="checkbox" id="dig-auto-advance" ${localStorage.getItem('dig_auto_advance') === 'true' ? 'checked' : ''} style="accent-color:${PRIMARY_COLOR};">
+        Auto-advance after Save
+      </label>
+    </div>
     <div style="display:flex;flex-direction:column;gap:6px;">
       <button id="dig-book-save" style="background:${PRIMARY_COLOR};color:white;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:12px;font-weight:bold;" ${isEmpty ? 'disabled' : ''}>💾 Save Page</button>
       <div style="gap:4px;display:flex;">
@@ -90,6 +96,8 @@ function renderBookScanTab(container) {
 
   document.getElementById('dig-book-refresh').onclick = () => renderBookScanTab(container);
   document.getElementById('dig-include-images').onchange = (e) => localStorage.setItem('dig_include_images', e.target.checked);
+  const autoAdvanceCheckbox = document.getElementById('dig-auto-advance');
+  if (autoAdvanceCheckbox) autoAdvanceCheckbox.onchange = (e) => localStorage.setItem('dig_auto_advance', e.target.checked);
   document.getElementById('dig-book-pick').onclick = () => startBookPicking(container, () => renderBookScanTab(container));
   document.getElementById('dig-book-auto').onclick = () => startAutoScan(container);
   document.getElementById('dig-view-full').onclick = () => {
@@ -97,12 +105,63 @@ function renderBookScanTab(container) {
     const text = btn.activeData ? btn.activeData.text : pageText;
     viewFullBookContent(chapter, text);
   };
+
+  // keep save button disabled until the preview contains real content
+  const preview = document.getElementById('dig-scan-preview');
+  const saveBtn = document.getElementById('dig-book-save');
+  const updateSaveState = () => {
+    if (!preview || !saveBtn) return;
+    const txt = preview.innerText || '';
+    // placeholder text should not count as real content
+    if (txt.includes('Searching frames')) {
+      saveBtn.disabled = true;
+    } else if (txt.trim().length < 5) {
+      saveBtn.disabled = true;
+    } else {
+      saveBtn.disabled = false;
+    }
+  };
+  if (preview) {
+    const obs = new MutationObserver(updateSaveState);
+    obs.observe(preview, {childList:true,subtree:true,characterData:true});
+    // initial state
+    updateSaveState();
+  }
   if (document.getElementById('dig-book-reset')) document.getElementById('dig-book-reset').onclick = () => { localStorage.removeItem('dig_custom_reader_selector'); renderBookScanTab(container); };
 
-  document.getElementById('dig-book-save').onclick = () => {
+  document.getElementById('dig-book-save').onclick = async () => {
     const btn = document.getElementById('dig-book-save');
-    saveBookPage(detectedClass, bookTitle, chapter, btn.activeData || { text: pageText, html: '' });
+    const prevSavedCount = getBookPageCount(detectedClass, bookTitle);
+    // Ensure manual save forces a record even for short pages (user pressed Save)
+    const saveObj = btn.activeData ? Object.assign({}, btn.activeData) : { text: pageText, html: '' };
+    if (!saveObj.text || saveObj.text.length < 20) saveObj.force = true;
+    saveBookPage(detectedClass, bookTitle, chapter, saveObj);
     btn.innerText = '✅ Saved!';
-    setTimeout(() => renderBookScanTab(container), 1500);
+
+    // persist auto-advance preference
+    const autoAdvance = localStorage.getItem('dig_auto_advance') === 'true';
+    if (autoAdvance) {
+      // wait up to 5s for saved count to increase
+      const start = Date.now();
+      let newCount = getBookPageCount(detectedClass, bookTitle);
+      while (newCount <= prevSavedCount && Date.now() - start < 5000) {
+        await new Promise(r => setTimeout(r, 200));
+        newCount = getBookPageCount(detectedClass, bookTitle);
+      }
+      // if count increased, navigate to next page via background scripting
+      if (newCount > prevSavedCount) {
+        try {
+          if (chrome && chrome.runtime && chrome.runtime.id) {
+            chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_NEXT_PAGE', prevSavedCount, cls: detectedClass, bookTitle });
+          } else {
+            // fallback: dispatch ArrowRight in this context
+            try { (document.body || document).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39, bubbles: true })); } catch (e) { }
+          }
+        } catch (e) { }
+      }
+    }
+
+    // refresh UI
+    setTimeout(() => renderBookScanTab(container), 300);
   };
 }

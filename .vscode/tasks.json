@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+        "label": "Start Edge (remote debugging 9222)",
+        "type": "shell",
+        "command": "$ms = (Get-Command msedge -ErrorAction SilentlyContinue).Source",
+        "problemMatcher": [
+            "$eslint-stylish"
+        ]
+    }
+]
+}

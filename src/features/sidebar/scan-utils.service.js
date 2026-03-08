@@ -32,13 +32,42 @@ async function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
         } catch (e) { }
     }
 
+    // helper: wait until element text grows before returning
+    // wait until the element has enough text; low timeout for speed
+    async function waitForContent(el, minLength = 20, timeout = 500) {
+        if (!el) return false;
+        const check = () => (el.innerText || '').trim().length >= minLength;
+        if (check()) return true;
+        return new Promise(resolve => {
+            const mo = new MutationObserver(() => {
+                if (check()) {
+                    mo.disconnect();
+                    resolve(true);
+                }
+            });
+            mo.observe(el, { childList: true, subtree: true, characterData: true });
+            setTimeout(() => { mo.disconnect(); resolve(check()); }, timeout);
+        });
+    }
+
     if (window !== window.top || window.location.href.includes('jigsaw.vitalsource.com')) {
         const isCoverPage = window.location.href.includes('cover');
-        const selectors = ['#pbk-page', '#pfe-content', '#vst-content-display', 'main article', '.epub-content', 'body'];
+        let selectors = ['#pbk-page', '#pfe-content', '#vst-content-display', 'main article', '.epub-content', 'body'];
+        // try cached selector first for speed
+        if (window._dig_last_vst_selector) {
+            selectors = [window._dig_last_vst_selector].concat(selectors.filter(s => s !== window._dig_last_vst_selector));
+        }
 
         for (const s of selectors) {
             const el = document.querySelector(s);
+            if (el) {
+                // make sure the found element actually has text (page might still be loading)
+                const ready = await waitForContent(el, isCoverPage ? 1 : 20, 500);
+                if (!ready) continue;
+            }
             if (el && (el.innerText?.trim().length >= 20 || isCoverPage)) {
+                // remember successful selector for later
+                window._dig_last_vst_selector = s;
 
                 // Clone the element to safely mutate the HTML string for export
                 let clone = el.cloneNode(true);
@@ -69,6 +98,19 @@ async function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
                     text: (await extractOrderedContent(el, includeImages)).substring(0, 15000),
                     html: clone.innerHTML
                 };
+                // try to read a VitalSource page number input if present (wait briefly for it)
+                try {
+                    let pg = document.querySelector('input[id^="text-field-"]');
+                    if (!pg) {
+                        // wait up to 300ms for input to appear
+                        const start = Date.now();
+                        while (!pg && Date.now() - start < 300) {
+                            await new Promise(r => setTimeout(r, 50));
+                            pg = document.querySelector('input[id^="text-field-"]');
+                        }
+                    }
+                    if (pg && pg.value) data.page = pg.value;
+                } catch (e) { }
 
                 // IF it's a cover page and we still have no images, try a surgical strike on original DOM
                 if (isCoverPage && !data.text.includes('![')) {

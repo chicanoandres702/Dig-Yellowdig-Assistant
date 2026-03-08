@@ -3,14 +3,30 @@
  */
 function renderDraftTab(container) {
     const kb = getKBSources();
-    let togglesHtml = '<div style="margin-bottom:10px;"><label style="font-size:12px;font-weight:bold;color:#10b981;">Context Sources</label>';
+    let togglesHtml = '<div style="margin-bottom:10px;"><label style="font-size:12px;font-weight:bold;color:#10b981;">Context Sources</label><p style="font-size:10px;color:#555;margin:4px 0;">(you can expand a book and check individual chapters)</p>';
     if (kb.length === 0) {
         togglesHtml += '<p style="font-size:11px;color:#888;">No KB sources yet.</p>';
     } else {
         kb.forEach(src => {
-            togglesHtml += `<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#334155;margin:4px 0;cursor:pointer;">
-        <input type="checkbox" class="dig-kb-toggle" data-cls="${src.cls}" data-topic="${src.topic}" checked style="accent-color:#10b981;">
-        ${src.cls} / ${src.topic} (${src.count})</label>`;
+            if (!src.isBook) {
+                togglesHtml += `<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#334155;margin:4px 0;cursor:pointer;">
+        <input type="checkbox" class="dig-kb-toggle" data-cls="${escapeHtml(src.cls)}" data-topic="${escapeHtml(src.topic)}" checked style="accent-color:#10b981;">
+        ${escapeHtml(src.cls)} / ${escapeHtml(src.topic)} (${src.count})</label>`;
+            } else {
+                // book with chapters
+                togglesHtml += `<div style="margin:4px 0;padding-left:0;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#334155;cursor:pointer;">
+            <input type="checkbox" class="dig-kb-toggle" data-cls="${escapeHtml(src.cls)}" data-topic="${escapeHtml(src.topic)}" checked style="accent-color:#10b981;">
+            ${escapeHtml(src.cls)} / ${escapeHtml(src.topic)} (book – ${src.count} pages)
+        </label>
+    </div>`;
+                Object.entries(src.chapters).forEach(([ch, cnt]) => {
+                    togglesHtml += `<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#334155;margin:2px 0 2px 20px;cursor:pointer;">
+            <input type="checkbox" class="dig-kb-toggle" data-cls="${src.cls}" data-topic="${src.topic}" data-chapter="${escapeHtml(ch).replace(/\"/g,'&quot;')}" checked style="accent-color:#10b981;">
+            ${escapeHtml(ch)} (${cnt})
+        </label>`;
+                });
+            }
         });
     }
     togglesHtml += '</div>';
@@ -33,6 +49,28 @@ function renderDraftTab(container) {
     </div>
   </div>`;
 
+    // keep book checkboxes hierarchical: toggle children when parent clicks, update parent when all children sync
+    container.addEventListener('change', e => {
+        const cb = e.target;
+        if (!cb.classList.contains('dig-kb-toggle')) return;
+        const cls = cb.dataset.cls;
+        const topic = cb.dataset.topic;
+        const hasChap = cb.dataset.chapter !== undefined;
+        if (!hasChap) {
+            // parent checkbox toggled -> change all chapter boxes
+            container.querySelectorAll(`.dig-kb-toggle[data-cls="${cls}"][data-topic="${topic}"][data-chapter]`).forEach(chcb => {
+                chcb.checked = cb.checked;
+            });
+        } else {
+            // chapter toggled -> update parent based on siblings
+            const parent = container.querySelector(`.dig-kb-toggle[data-cls="${cls}"][data-topic="${topic}"]:not([data-chapter])`);
+            if (parent) {
+                const siblings = container.querySelectorAll(`.dig-kb-toggle[data-cls="${cls}"][data-topic="${topic}"][data-chapter]`);
+                const allChecked = Array.from(siblings).every(chcb => chcb.checked);
+                parent.checked = allChecked;
+            }
+        }
+    });
     document.getElementById('dig-draft-gen').onclick = async () => {
         const prompt = document.getElementById('dig-draft-prompt').value;
         const title = document.getElementById('dig-draft-title').value;

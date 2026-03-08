@@ -22,6 +22,13 @@ function renderKnowledgeTab(container) {
     });
 }
 
+
+// when the built‑in PDF exporter fails we fall back to HTML -> print
+function _fallbackExportAsHtml(title, contentArray) {
+    exportToHTML(title, contentArray);
+    alert('Downloaded HTML; open it and use the browser\'s print dialog (File → Print) to save as a PDF.');
+}
+
 function renderKBClassItems(div, kb, cls, root) {
     if (!kb[cls]) { div.innerHTML = '<p style="color:#888;font-size:12px;">No items for this class.</p>'; return; }
     let html = '';
@@ -51,7 +58,20 @@ function renderKBClassItems(div, kb, cls, root) {
     });
     div.innerHTML = html;
     div.querySelectorAll('.dig-kb-export').forEach(btn => {
-        btn.onclick = () => exportToPDF(btn.dataset.topic, kb[btn.dataset.cls][btn.dataset.topic]);
+        btn.onclick = async () => {
+            // PDF generation can take a while for book captures; show a short notification and
+            // catch any unhandled promise rejections so the user isn't left wondering why nothing
+            // happened.
+            try {
+                alert('Generating PDF – this may take a minute.  Please leave the page open.');
+                await exportToPDF(btn.dataset.topic, kb[btn.dataset.cls][btn.dataset.topic]);
+            } catch (err) {
+                console.error('KB PDF export failed:', err);
+                alert('PDF export failed, see console for details.  Falling back to HTML export.');
+                exportToHTML(btn.dataset.topic, kb[btn.dataset.cls][btn.dataset.topic]);
+                alert('HTML file downloaded; open it in your browser and use File→Print→Save as PDF to get a document.');
+            }
+        };
     });
     div.querySelectorAll('.dig-kb-export-html').forEach(btn => {
         btn.onclick = () => exportToHTML(btn.dataset.topic, kb[btn.dataset.cls][btn.dataset.topic]);

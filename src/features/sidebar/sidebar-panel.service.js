@@ -7,8 +7,25 @@ const FAB_ID = 'dig-fab';
 const TABS = ['Scan', 'Knowledge', 'Draft', 'Notes', 'Debug'];
 const TAB_ICONS = ['📡', '📚', '✍️', '📌', '🔧'];
 
+function ensureSidebarStyles() {
+    if (document.getElementById('dig-sidebar-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'dig-sidebar-styles';
+    style.textContent = `
+body.dig-sidebar-open > *:not(#${SIDEBAR_ID}):not(#${FAB_ID}) {
+    transform: translateX(var(--dig-sidebar-offset, 0));
+    transition: transform 0.3s ease;
+}
+body.dig-sidebar-open, html.dig-sidebar-open {
+    overflow-x: hidden;
+}
+`;
+    document.head.appendChild(style);
+}
+
 function createSidebar() {
     if (window !== window.top) return;
+    ensureSidebarStyles();
     if (document.getElementById(SIDEBAR_ID)) return;
 
     const sidebar = document.createElement('div');
@@ -87,12 +104,16 @@ function toggleSidebar() {
     const nextOpen = !isOpen;
     s.style.right = nextOpen ? '0px' : `-${SIDEBAR_WIDTH}`;
 
-    // Shift body for responsiveness
-    document.body.style.transition = 'margin-right 0.3s ease';
-    document.documentElement.style.transition = 'margin-right 0.3s ease';
-    document.body.style.marginRight = nextOpen ? SIDEBAR_WIDTH : '0';
-    document.documentElement.style.marginRight = nextOpen ? SIDEBAR_WIDTH : '0';
-    document.documentElement.style.overflowX = nextOpen ? 'hidden' : '';
+    // compute actual width and set CSS variable for transform
+    const offset = `${s.getBoundingClientRect().width}px`;
+    document.body.style.setProperty('--dig-sidebar-offset', nextOpen ? `-${offset}` : '0');
+
+    // Shift page content via class
+    document.body.classList.toggle('dig-sidebar-open', nextOpen);
+    document.documentElement.classList.toggle('dig-sidebar-open', nextOpen);
+
+    // no margin adjustment; transforms handle the shift without changing layout
+
 }
 
 

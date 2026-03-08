@@ -40,6 +40,20 @@
         <p style="font-size: 12px; color: #475569;">The Dig toolbar is active on Yellowdig. Use the "Context" button to upload your PDFs.</p>
     </div>
 
+    <div class="card" id="diagnostics-card">
+        <label>DIAGNOSTICS</label>
+        <p style="font-size:12px;color:#475569;margin-top:6px;">Download or stream debug logs for troubleshooting or to send to an external diagnostic endpoint (MCP/webhook).</p>
+        <div class="input-group">
+            <label>Stream URL (optional)</label>
+            <input type="text" id="streamUrl" placeholder="https://example.local/logs">
+        </div>
+        <button id="toggleStreamBtn" style="background:#2563eb;">Start Streaming Logs</button>
+        <button id="downloadLogsBtn" style="margin-top:8px;background:#3b82f6;">Download Logs</button>
+        <button id="getPageReportBtn" style="margin-top:8px;background:#06b6d4;">Get Page Report</button>
+        <button id="copyDiagBtn" style="margin-top:8px;background:#64748b;">Copy Diagnostics</button>
+        <button id="clearLogsBtn" style="margin-top:8px;background:#ef4444;">Clear Logs</button>
+    </div>
+
     <div class="footer">Social Work & Sociology Resource Hub</div>
     
         <script src="popup.js"></script>
