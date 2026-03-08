@@ -49,25 +49,31 @@ function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
 
 function extractOrderedContent(root, includeImages) {
     let result = '';
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null, false);
-    let node = walker.nextNode();
+    const doc = root.ownerDocument || document;
+    const blockTags = new Set(['BR', 'P', 'H1', 'H2', 'H3', 'LI', 'DIV']);
+    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null, false);
 
+    let node = walker.nextNode();
     while (node) {
         if (node.nodeType === Node.TEXT_NODE) {
             const val = node.nodeValue.trim();
             if (val) result += val + ' ';
         } else if (node.nodeType === Node.ELEMENT_NODE) {
-            if (node.tagName === 'BR' || node.tagName === 'P' || node.tagName === 'DIV' || node.tagName === 'LI') {
-                result += '\n';
-            } else if (includeImages && node.tagName === 'IMG') {
-                if (node.width >= 50 && node.height >= 50) {
-                    result += `\n\n![${node.alt || 'Image'}](${node.src})\n\n`;
+            const tag = node.tagName;
+            if (includeImages && tag === 'IMG') {
+                const src = node.src || node.getAttribute('data-src') || node.getAttribute('src');
+                const isLarge = node.width >= 50 && node.height >= 50;
+                if (src && isLarge) {
+                    const fullSrc = src.startsWith('data:') ? src : new URL(src, doc.baseURI).href;
+                    result += `\n\n$(${fullSrc})\n\n`;
                 }
+            } else if (blockTags.has(tag)) {
+                if (!result.endsWith('\n')) result += '\n';
             }
         }
         node = walker.nextNode();
     }
-    return result.replace(/\n\s*\n/g, '\n\n').trim();
+    return result.replace(/\n\s*\n/g, '\n\n').replace(/ {2,}/g, ' ').trim();
 }
 
 
