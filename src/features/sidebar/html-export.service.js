@@ -7,6 +7,13 @@ function exportToHTML(title, contentArray) {
         return;
     }
 
+    // Capture any sniffed pagebreaks so the exported HTML can include the mapping
+    let pagebreaksJson = 'null';
+    try {
+        const pb = (window.sniffedMetadata && window.sniffedMetadata.pagebreaks) ? window.sniffedMetadata.pagebreaks : null;
+        if (pb) pagebreaksJson = JSON.stringify(pb).replace(/</g, '\\u003c');
+    } catch (e) { }
+
     let html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -44,7 +51,8 @@ function exportToHTML(title, contentArray) {
 <body>
     <button onclick="window.print()" class="no-print" style="position:fixed;top:20px;right:20px;padding:10px 20px;background:#10b981;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold;box-shadow:0 2px 4px rgba(0,0,0,0.1);z-index:9999;">Export to PDF</button>
     <h1>${escapeHtml(title)}</h1>
-    <div id="content">`;
+    <div id="content">
+        <script id="dig-sniffed-pagebreaks" type="application/json">${pagebreaksJson}</script>`;
 
     // Sort by spine/section order
     const sorted = [...contentArray].sort((a, b) => (a.order || 0) - (b.order || 0));

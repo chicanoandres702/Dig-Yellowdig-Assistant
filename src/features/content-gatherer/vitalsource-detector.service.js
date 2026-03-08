@@ -17,44 +17,113 @@ function detectVitalSourceChapter() {
     // Sniffed Metadata Priority (pagebreaks) - some VitalSource installs expose pagebreaks mapping
     if (metadata && metadata.pagebreaks) {
         const topUrl = window.top?.location?.href || url;
-        let pbList = [];
-        const pb = metadata.pagebreaks;
-        if (Array.isArray(pb)) pbList = pb;
-        else if (pb && Array.isArray(pb.pages)) pbList = pb.pages;
-        else if (pb && typeof pb === 'object') {
-            const vals = Object.values(pb).filter(v => v && typeof v === 'object' && (v.absoluteURL || v.cfi || v.path || v.href || v.url || v.resource || v.chapterTitle || v.title || v.label));
-            if (vals.length) pbList = vals;
-        }
+        const payload = metadata.pagebreaks;
+        // prefer a centralized matcher if available
+        const matcher = (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.findMatchingPagebreakEntry === 'function') ? window.DIG_CFI.findMatchingPagebreakEntry : null;
+        try {
+            if (matcher) {
+                const res = matcher(payload, topUrl);
+                if (res && res.entry) {
+                    const matchedPb = res.entry;
+                    if (matchedPb && (matchedPb.chapterTitle || matchedPb.title || matchedPb.label || matchedPb.pageTitle || matchedPb.pageLabel)) {
+                        const ch = matchedPb.chapterTitle || matchedPb.title || matchedPb.label || matchedPb.pageTitle || matchedPb.pageLabel;
+                        digLog(`Chapter detected from sniffed pagebreaks: ${ch}`);
+                        return ch.trim();
+                    }
+                }
+            } else {
+                // fallback to previous behavior
+                let pbList = [];
+                const pb = metadata.pagebreaks;
+                if (Array.isArray(pb)) pbList = pb;
+                else if (pb && Array.isArray(pb.pages)) pbList = pb.pages;
+                else if (pb && typeof pb === 'object') {
+                    const vals = Object.values(pb).filter(v => v && typeof v === 'object' && (v.absoluteURL || v.cfi || v.path || v.href || v.url || v.resource || v.chapterTitle || v.title || v.label));
+                    if (vals.length) pbList = vals;
+                }
 
-        if (pbList.length) {
-            const matchedPb = pbList.find(p => {
-                return (p.absoluteURL && topUrl.includes(p.absoluteURL)) ||
-                    (p.cfi && topUrl.includes(p.cfi)) ||
-                    (p.path && topUrl.includes(p.path)) ||
-                    (p.href && topUrl.includes(p.href)) ||
-                    (p.url && topUrl.includes(p.url)) ||
-                    (p.resource && topUrl.includes(p.resource));
-            });
+                if (pbList.length) {
+                    const cfiMatcher = (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.cfiMatchesUrl === 'function') ? window.DIG_CFI.cfiMatchesUrl : null;
+                    const matchedPb = pbList.find(p => {
+                        try {
+                            if (!p) return false;
+                            if (p.absoluteURL && topUrl.includes(String(p.absoluteURL))) return true;
+                            if (p.href && topUrl.includes(String(p.href))) return true;
+                            if (p.url && topUrl.includes(String(p.url))) return true;
+                            if (p.resource && topUrl.includes(String(p.resource))) return true;
+                            if (p.path && topUrl.includes(String(p.path))) return true;
+                            const cfiVal = p.cfiWithoutAssertions || p.cfi;
+                            if (cfiVal) {
+                                if (cfiMatcher) {
+                                    try { if (cfiMatcher(cfiVal, topUrl)) return true; } catch (e) { }
+                                } else {
+                                    try {
+                                        const raw = String(cfiVal);
+                                        const decoded = decodeURIComponent(raw);
+                                        if (decoded && topUrl.includes(decoded)) return true;
+                                        const stripped = decoded.replace(/^epubcfi\(?/i, '').replace(/\)?$/, '');
+                                        if (stripped && topUrl.includes(stripped)) return true;
+                                        if (topUrl.includes(raw)) return true;
+                                    } catch (e) { }
+                                }
+                            }
+                        } catch (e) { /* ignore */ }
+                        return false;
+                    });
 
-            if (matchedPb && (matchedPb.chapterTitle || matchedPb.title || matchedPb.label || matchedPb.pageTitle || matchedPb.pageLabel)) {
-                const ch = matchedPb.chapterTitle || matchedPb.title || matchedPb.label || matchedPb.pageTitle || matchedPb.pageLabel;
-                digLog(`Chapter detected from sniffed pagebreaks: ${ch}`);
-                return ch.trim();
+                    if (matchedPb && (matchedPb.chapterTitle || matchedPb.title || matchedPb.label || matchedPb.pageTitle || matchedPb.pageLabel)) {
+                        const ch = matchedPb.chapterTitle || matchedPb.title || matchedPb.label || matchedPb.pageTitle || matchedPb.pageLabel;
+                        digLog(`Chapter detected from sniffed pagebreaks: ${ch}`);
+                        return ch.trim();
+                    }
+                }
             }
-        }
+        } catch (e) { /* ignore */ }
     }
     if (metadata && metadata.pages && Array.isArray(metadata.pages)) {
         const topUrl = window.top?.location?.href || url;
-        const matchedPage = metadata.pages.find(p => {
-            return (p.absoluteURL && topUrl.includes(p.absoluteURL)) ||
-                (p.cfi && topUrl.includes(p.cfi)) ||
-                (p.path && topUrl.includes(p.path));
-        });
+        const payload = metadata.pages;
+        const matcher = (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.findMatchingPagebreakEntry === 'function') ? window.DIG_CFI.findMatchingPagebreakEntry : null;
+                try {
+                    if (matcher) {
+                        const res = matcher(payload, topUrl);
+                        if (res && res.entry && res.entry.chapterTitle) {
+                            digLog(`Chapter detected from sniffed pages.json: ${res.entry.chapterTitle}`);
+                            return res.entry.chapterTitle.trim();
+                        }
+                    } else {
+                        const cfiMatcher = (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.cfiMatchesUrl === 'function') ? window.DIG_CFI.cfiMatchesUrl : null;
+                        const topUrl2 = topUrl;
+                        const matchedPage = metadata.pages.find(p => {
+                            try {
+                                if (!p) return false;
+                                if (p.absoluteURL && topUrl2.includes(String(p.absoluteURL))) return true;
+                                if (p.path && topUrl2.includes(String(p.path))) return true;
+                                const cfiVal = p.cfiWithoutAssertions || p.cfi;
+                                if (cfiVal) {
+                                    if (cfiMatcher) {
+                                        try { if (cfiMatcher(cfiVal, topUrl2)) return true; } catch (e) { }
+                                    } else {
+                                        try {
+                                            const raw = String(cfiVal);
+                                            const decoded = decodeURIComponent(raw);
+                                            if (decoded && topUrl2.includes(decoded)) return true;
+                                            const stripped = decoded.replace(/^epubcfi\(?/i, '').replace(/\)?$/, '');
+                                            if (stripped && topUrl2.includes(stripped)) return true;
+                                            if (topUrl2.includes(raw)) return true;
+                                        } catch (e) { }
+                                    }
+                                }
+                            } catch (e) { /* ignore */ }
+                            return false;
+                        });
 
-        if (matchedPage && matchedPage.chapterTitle) {
-            digLog(`Chapter detected from sniffed pages.json: ${matchedPage.chapterTitle}`);
-            return matchedPage.chapterTitle.trim();
-        }
+                        if (matchedPage && matchedPage.chapterTitle) {
+                            digLog(`Chapter detected from sniffed pages.json: ${matchedPage.chapterTitle}`);
+                            return matchedPage.chapterTitle.trim();
+                        }
+                    }
+                } catch (e) { /* ignore */ }
     }
 
     // Sniffed Metadata Priority (books.json fallback)

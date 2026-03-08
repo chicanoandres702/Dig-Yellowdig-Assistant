@@ -303,70 +303,22 @@ function startAutoScan(container) {
         if (diff < NAV_COOLDOWN_MS) {
             await new Promise(r => setTimeout(r, NAV_COOLDOWN_MS - diff));
         }
-        // Try to set the page input directly (preferred when pages are numeric)
-        try {
-            let targetWin = null;
-            try { const ctxs = findReaderContexts(); if (ctxs && ctxs.length) targetWin = ctxs[0]; } catch (e) { }
-            if (targetWin) {
-                try { if (trySetPageInput(targetWin)) { _lastNavTime = Date.now(); navInProgress = false; return; } } catch (e) { }
-            }
-            try { if (trySetPageInput(window)) { _lastNavTime = Date.now(); navInProgress = false; return; } } catch (e) { }
-        } catch (e) { }
-        try {
-            // Prefer clicking a native "next" control in the reader frame if present,
-            // otherwise dispatch a keyboard event to the most-likely reader document.
-            let clicked = false;
-            let targetWin = null;
-            try { const ctxs = findReaderContexts(); if (ctxs && ctxs.length) targetWin = ctxs[0]; } catch (e) { }
 
-            const tryClickNext = (win) => {
+        try {
+            // Prefer delegating navigation to the background script which runs across frames
+            if (chrome && chrome.runtime && chrome.runtime.id) {
                 try {
-                    const doc = win.document;
-                    if (!doc) return false;
-                    const sel = [
-                        "button[aria-label*='Next']",
-                        "button[aria-label*='next']",
-                        "button[title*='Next']",
-                        "button[title*='next']",
-                        "[data-action='next']",
-                        "[data-test='next']",
-                        ".next-page",
-                        ".reader-next",
-                        ".vst-next",
-                        ".next"
-                    ];
-                    for (const s of sel) {
-                        const el = doc.querySelector(s);
-                        if (el) {
-                            try { el.click(); digLog('navigateNext: clicked next control', { selector: s }); } catch (e) { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); digLog('navigateNext: dispatched click event', { selector: s }); }
-                            return true;
-                        }
-                    }
-                    // Fallback: click on right side of main reader area
-                    const main = doc.querySelector('#pbk-page, #pfe-content, #vst-content-display, main article, .epub-content, body');
-                    if (main) {
-                        const r = main.getBoundingClientRect();
-                        const ev = new MouseEvent('click', { bubbles: true, cancelable: true, clientX: Math.max(r.left + 10, r.right - 10), clientY: r.top + (r.height / 2) });
-                        main.dispatchEvent(ev);
-                        digLog('navigateNext: clicked reader area fallback');
-                        return true;
-                    }
-                } catch (e) { }
-                return false;
-            };
-
-            if (targetWin) clicked = tryClickNext(targetWin);
-            if (!clicked) clicked = tryClickNext(window);
-
-            if (!clicked) {
-                // Fallback: dispatch a single ArrowRight keydown to the most-likely document
-                const targetDoc = (targetWin && targetWin.document) ? targetWin.document : ((window.top && window.top.document) ? window.top.document : document);
-                try { (targetDoc.body || targetDoc.documentElement).focus && (targetDoc.body || targetDoc.documentElement).focus(); } catch (e) { }
-                const ev = new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39, bubbles: true, cancelable: true });
-                try { (targetDoc.body || targetDoc).dispatchEvent(ev); digLog('navigateNext: dispatched keydown to document'); } catch (e) { }
-                await new Promise(r => setTimeout(r, 300));
+                    chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_NEXT_PAGE', prevSavedCount: null, cls: detectedClass, bookTitle: getBookTitle() });
+                } catch (err) {
+                    // fallback to requesting top-window key via postMessage
+                    try { window.postMessage({ type: 'DIG_NAVIGATE_NEXT' }, '*'); } catch (e) { }
+                }
+            } else {
+                // request the top window context to dispatch ArrowRight
+                try { window.postMessage({ type: 'DIG_NAVIGATE_NEXT' }, '*'); } catch (e) { }
             }
         } catch (e) { /* ignore */ }
+
         _lastNavTime = Date.now();
         navInProgress = false;
     };
@@ -392,98 +344,165 @@ function startAutoScan(container) {
             const m = window.sniffedMetadata;
             const topUrl = window.top?.location?.href || window.location.href;
 
-            // Prefer pages.json mapping when present (keeps existing behavior)
-            if (m && m.pages && Array.isArray(m.pages)) {
-                const match = m.pages.find(p => {
-                    const favreOk = topUrl.includes('favre=brett');
-                    return favreOk && ((p.absoluteURL && topUrl.includes(p.absoluteURL)) ||
-                        (p.cfi && topUrl.includes(p.cfi)) ||
-                        (p.path && topUrl.includes(p.path)) ||
-                        (p.url && topUrl.includes(p.url)));
-                });
-                if (match && match.label) return match.label;
-            }
-
-            // Fallback: check pagebreaks payloads which may use different keys
-            if (m && m.pagebreaks) {
-                let pbList = [];
-                const pb = m.pagebreaks;
-                if (Array.isArray(pb)) pbList = pb;
-                else if (pb && Array.isArray(pb.pages)) pbList = pb.pages;
-                else if (pb && typeof pb === 'object') {
-                    const vals = Object.values(pb).filter(v => v && typeof v === 'object' && (v.absoluteURL || v.cfi || v.path || v.href || v.url || v.resource || v.label || v.page || v.title));
-                    if (vals.length) pbList = vals;
+            try {
+                const payload = m && (m.pages || m.pagebreaks || m) ? (m.pages || m.pagebreaks || m) : null;
+                if (payload) {
+                    const matcher = (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.findMatchingPagebreakEntry === 'function') ? window.DIG_CFI.findMatchingPagebreakEntry : (typeof findMatchingPagebreakEntry === 'function' ? findMatchingPagebreakEntry : null);
+                    if (matcher) {
+                        const res = matcher(payload, topUrl);
+                        if (res && res.entry) {
+                            const e = res.entry;
+                            return e.label || e.page || e.page_label || e.pageLabel || e.title || null;
+                        }
+                    }
                 }
-
-                if (pbList.length) {
-                    const match = pbList.find(p => {
-                        return (p.absoluteURL && topUrl.includes(p.absoluteURL)) ||
-                            (p.cfi && topUrl.includes(p.cfi)) ||
-                            (p.path && topUrl.includes(p.path)) ||
-                            (p.href && topUrl.includes(p.href)) ||
-                            (p.url && topUrl.includes(p.url)) ||
-                            (p.resource && topUrl.includes(p.resource));
-                    });
-                    if (match) return match.label || match.page_label || match.page || match.pageLabel || match.title || null;
-                }
-            }
+            } catch (e) { /* ignore */ }
         } catch (e) { }
         return null;
     };
 
+    // Split a captured page's HTML/text into multiple logical pages according to sniffed pagebreaks
+    const splitContentByPagebreaks = (text, html, url) => {
+        try {
+            const m = window.sniffedMetadata;
+            if (!m || !m.pagebreaks) return null;
+            let pbList = [];
+            const pb = m.pagebreaks;
+            if (Array.isArray(pb)) pbList = pb;
+            else if (pb && Array.isArray(pb.pages)) pbList = pb.pages;
+            else if (pb && typeof pb === 'object') pbList = Object.values(pb).filter(v => v && typeof v === 'object');
+
+            if (!pbList.length) return null;
+
+            const topUrl = window.top?.location?.href || url || window.location.href;
+
+            // Find pagebreak entries that match this viewer URL/resource
+            const matches = pbList.filter(p => {
+                try {
+                    if (!p) return false;
+                    if (p.absoluteURL && topUrl.includes(String(p.absoluteURL))) return true;
+                    if (p.url && topUrl.includes(String(p.url))) return true;
+                    if (p.href && topUrl.includes(String(p.href))) return true;
+                    if (p.resource && topUrl.includes(String(p.resource))) return true;
+                    if (p.path && topUrl.includes(String(p.path))) return true;
+                    if (p.cfi && cfiMatchesUrl(p.cfi, topUrl)) return true;
+                    if (p.cfiWithoutAssertions && cfiMatchesUrl(p.cfiWithoutAssertions, topUrl)) return true;
+                    return false;
+                } catch (e) { return false; }
+            });
+
+            // If no direct matches, try to find entries that belong to the same chapter/resource
+            if (matches.length === 0) {
+                const base = (topUrl || '').split(/[?#]/)[0];
+                const fallback = pbList.filter(p => {
+                    try {
+                        const vals = [p.resource, p.url, p.href, p.absoluteURL, p.path].filter(Boolean).map(String);
+                        // include CFI variants in fallback matching
+                        if (p.cfi || p.cfiWithoutAssertions) {
+                            const raw = String(p.cfiWithoutAssertions || p.cfi || '');
+                            const decoded = _safeDecode(raw);
+                            vals.push(raw);
+                            if (decoded) vals.push(decoded);
+                            const stripped = decoded.replace(/^epubcfi\(?/i, '').replace(/\)?$/, '');
+                            if (stripped) vals.push(stripped);
+                        }
+                        return vals.some(v => base.includes(v) || v.includes(base));
+                    } catch (e) { return false; }
+                });
+                if (fallback.length) matches.push(...fallback);
+            }
+
+            if (!matches.length) return null;
+
+            // If entries include nested subpages arrays, expand those
+            let entries = [];
+            for (const mm of matches) {
+                if (mm && Array.isArray(mm.subpages) && mm.subpages.length) entries.push(...mm.subpages);
+                else entries.push(mm);
+            }
+
+            if (!entries.length) return null;
+
+            // Try selector-based extraction when selectors are provided
+            const allHaveSelector = entries.every(e => e && (e.selector || e.cssSelector || e.elementSelector || e.id));
+            const slices = [];
+
+            if (allHaveSelector) {
+                const rootSel = window._dig_last_vst_selector || '#pbk-page' || '#pfe-content' || '.epub-content';
+                const root = (document.querySelector(rootSel) || document);
+                for (const e of entries) {
+                    let sel = e.selector || e.cssSelector || e.elementSelector || (e.id ? `#${e.id}` : null);
+                    let el = null;
+                    try { if (sel && root) el = root.querySelector(sel) || document.querySelector(sel); } catch (err) { el = null; }
+                    const sliceHtml = el ? el.innerHTML : '';
+                    const sliceText = el ? (el.innerText || '') : '';
+                    const label = e.label || e.page || e.page_label || e.title || e.pageTitle || null;
+                    slices.push({ text: sliceText, html: sliceHtml, label });
+                }
+                return slices.length ? slices : null;
+            }
+
+            // If entries include start/end markers, slice by those markers on the HTML string
+            const allHaveMarkers = entries.every(e => e && (e.start_marker || e.end_marker || e.start || e.end));
+            if (allHaveMarkers && html) {
+                for (const e of entries) {
+                    const start = e.start_marker || e.start || null;
+                    const end = e.end_marker || e.end || null;
+                    let sliceHtml = '';
+                    try {
+                        let sidx = start ? html.indexOf(start) : 0;
+                        if (sidx === -1) sidx = 0;
+                        let eidx = end ? html.indexOf(end, sidx) : html.length;
+                        if (eidx === -1) eidx = html.length;
+                        sliceHtml = html.substring(sidx, eidx);
+                    } catch (err) { sliceHtml = ''; }
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(sliceHtml || '<div></div>', 'text/html');
+                    const sliceText = doc.body ? (doc.body.innerText || '') : '';
+                    const label = e.label || e.page || e.page_label || e.title || e.pageTitle || null;
+                    slices.push({ text: sliceText, html: sliceHtml, label });
+                }
+                return slices.length ? slices : null;
+            }
+
+            // Fallback: split the text into N roughly-equal chunks based on paragraph boundaries
+            const paraCandidates = (text || '').split(/\n{2,}|\n/).map(p => p.trim()).filter(Boolean);
+            if (!paraCandidates.length) return null;
+            const N = entries.length;
+            const totalLen = paraCandidates.reduce((s, p) => s + p.length, 0);
+            const target = Math.max(100, Math.round(totalLen / N));
+            let cur = [];
+            let curLen = 0;
+            let idx = 0;
+            for (const p of paraCandidates) {
+                cur.push(p);
+                curLen += p.length;
+                if (curLen >= target && idx < N - 1) {
+                    const label = entries[idx] ? (entries[idx].label || entries[idx].page || entries[idx].page_label || entries[idx].title) : null;
+                    slices.push({ text: cur.join('\n\n'), html: cur.map(t => `<p>${escapeHtml(t)}</p>`).join('\n'), label });
+                    idx++;
+                    cur = [];
+                    curLen = 0;
+                }
+            }
+            if (cur.length) {
+                const label = entries[idx] ? (entries[idx].label || entries[idx].page || entries[idx].page_label || entries[idx].title) : null;
+                slices.push({ text: cur.join('\n\n'), html: cur.map(t => `<p>${escapeHtml(t)}</p>`).join('\n'), label });
+            }
+            return slices.length ? slices : null;
+        } catch (e) { return null; }
+    };
+
     const ensureSingleStep = async (oldPage, prevSavedCount = null) => {
         try {
-            // Attempt direct page-input set first (preferred for numeric page fields)
-            let setSucceeded = false;
+            // Delegate navigation to background script or request top-window ArrowRight via postMessage
             try {
-                const ctxs = findReaderContexts();
-                if (ctxs && ctxs.length) {
-                    for (const w of ctxs) {
-                        try {
-                            const res = trySetPageInput(w);
-                            if (res) { setSucceeded = true; break; }
-                        } catch (e) { }
-                    }
-                } else {
-                    try { if (trySetPageInput(window)) { setSucceeded = true; } } catch (e) { }
-                }
-            } catch (e) { }
-
-            // If direct set succeeded, wait briefly and verify the page changed; if so, skip background nav
-            if (setSucceeded) {
-                let attempts = 0;
-                let current = oldPage;
-                while (attempts < 8) {
-                    await new Promise(r => setTimeout(r, 100));
-                    current = readPageNumFromContexts();
-                    if (areConsecutive(oldPage, current) || (current && current !== oldPage)) return current;
-                    attempts++;
-                }
-                // fall through to background navigation if setting the input didn't take effect
-            }
-
-            // Fallback: if we've detected numeric page inputs, prefer input-based navigation only
-            if (preferInputNavigation) {
-                // give it a short grace period to update; if it doesn't, return oldPage
-                let attempts = 0;
-                let current = oldPage;
-                while (attempts < 6) {
-                    await new Promise(r => setTimeout(r, 100));
-                    current = readPageNumFromContexts();
-                    if (areConsecutive(oldPage, current) || (current && current !== oldPage)) return current;
-                    attempts++;
-                }
-                return oldPage;
-            }
-
-            // Otherwise use background navigation or click-based fallback
-            if (chrome && chrome.runtime && chrome.runtime.id) {
-                try {
+                if (chrome && chrome.runtime && chrome.runtime.id) {
                     chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_NEXT_PAGE', prevSavedCount: prevSavedCount, cls: detectedClass, bookTitle: getBookTitle() });
-                } catch (e) { await navigateNext(); }
-            } else {
-                await navigateNext();
-            }
+                } else {
+                    try { window.postMessage({ type: 'DIG_NAVIGATE_NEXT' }, '*'); } catch (e) { }
+                }
+            } catch (e) { try { window.postMessage({ type: 'DIG_NAVIGATE_NEXT' }, '*'); } catch (er) { } }
 
             let attempts = 0;
             let current = oldPage;
@@ -491,7 +510,7 @@ function startAutoScan(container) {
             while (attempts < 8) {
                 await new Promise(r => setTimeout(r, 100));
                 current = readPageNumFromContexts();
-                if (areConsecutive(oldPage, current)) return current;
+                if (areConsecutive(oldPage, current) || (current && current !== oldPage)) return current;
                 attempts++;
             }
             return current;
@@ -551,11 +570,37 @@ function startAutoScan(container) {
                 if (!finalPage && currentPageNum) finalPage = currentPageNum;
                 if (finalPage != null) saveObj.page = finalPage;
                 try { setAutoScanStatus(`Saving…`); } catch (e) { }
-                saveBookPage(detectedClass, bookTitle, chapter, saveObj);
-                // mirror to preview for user feedback
-                updatePreviewBox(text || html);
-                try { setAutoScanStatus('Saved — awaiting confirmation…'); } catch (e) { }
-                digLog(`Page ${pageCount} saved (page ${finalPage || page || 'unknown'}) url=${url || window.location.href}`);
+                // If sniffed pagebreaks indicate multiple logical pages inside this viewer page,
+                // split the captured content and save each slice separately.
+                try {
+                    const slices = splitContentByPagebreaks(text, html, url);
+                    if (slices && Array.isArray(slices) && slices.length > 0) {
+                        // Save each slice with its associated label (if available)
+                        for (let si = 0; si < slices.length; si++) {
+                            const s = slices[si];
+                            const sliceSave = { text: s.text || '', html: s.html || '' };
+                            if (s.label != null) sliceSave.page = s.label;
+                            else if (finalPage != null) sliceSave.page = `${finalPage}${slices.length > 1 ? `.${si+1}` : ''}`;
+                            sliceSave.force = true; // ensure save even for short slices
+                            saveBookPage(detectedClass, bookTitle, chapter, sliceSave);
+                            digLog(`Saved slice ${si+1}/${slices.length} (page ${sliceSave.page || 'unknown'}) url=${url || window.location.href}`);
+                        }
+                        // mirror first slice to preview for user feedback
+                        updatePreviewBox((slices[0] && (slices[0].text || slices[0].html)) || text || html);
+                        try { setAutoScanStatus('Saved — awaiting confirmation…'); } catch (e) { }
+                    } else {
+                        saveBookPage(detectedClass, bookTitle, chapter, saveObj);
+                        // mirror to preview for user feedback
+                        updatePreviewBox(text || html);
+                        try { setAutoScanStatus('Saved — awaiting confirmation…'); } catch (e) { }
+                        digLog(`Page ${pageCount} saved (page ${finalPage || page || 'unknown'}) url=${url || window.location.href}`);
+                    }
+                } catch (e) {
+                    // fallback to single save on error
+                    saveBookPage(detectedClass, bookTitle, chapter, saveObj);
+                    updatePreviewBox(text || html);
+                    digLog(`Page ${pageCount} saved (page ${finalPage || page || 'unknown'}) url=${url || window.location.href}`);
+                }
                 // resolve the capture promise (guard against multiple calls)
                 if (typeof resolveCapture === 'function') { try { resolveCapture(); } catch (e) { } resolveCapture = null; }
             }

@@ -12,13 +12,82 @@ function withChrome(fn) {
   }
 }
 
+// Normalize pagebreaks payloads into pages entries the rest of the app expects
+function normalizePagebreaksToPages(pb) {
+  const pages = [];
+  try {
+    if (!pb) return pages;
+    let entries = [];
+    if (Array.isArray(pb)) entries = pb;
+    else if (pb && Array.isArray(pb.pages)) entries = pb.pages;
+    else if (pb && typeof pb === 'object') entries = Object.values(pb);
+
+    entries.forEach(entry => {
+      if (!entry) return;
+      // If entry itself is a collection, flatten
+      if (Array.isArray(entry)) {
+        entry.forEach(e => entries.push(e));
+        return;
+      }
+      const label = entry.label || entry.page || entry.page_label || entry.pageLabel || entry.title || entry.pageTitle || null;
+      const obj = {};
+      if (label != null) obj.label = String(label);
+      if (entry.absoluteURL) obj.absoluteURL = entry.absoluteURL;
+      if (entry.url) obj.url = entry.url;
+      if (entry.href) obj.href = entry.href;
+      if (entry.resource) obj.resource = entry.resource;
+      if (entry.cfi) obj.cfi = entry.cfi;
+      if (entry.path) obj.path = entry.path;
+      if (entry.chapterTitle) obj.chapterTitle = entry.chapterTitle;
+      if (Object.keys(obj).length) pages.push(obj);
+
+      // handle nested subpages/breaks
+      if (entry.subpages && Array.isArray(entry.subpages)) {
+        entry.subpages.forEach(sp => {
+          const splabel = sp.label || sp.page || sp.page_label || sp.pageLabel || sp.title || null;
+          const spObj = {};
+          if (splabel != null) spObj.label = String(splabel);
+          if (sp.absoluteURL) spObj.absoluteURL = sp.absoluteURL;
+          if (sp.url) spObj.url = sp.url;
+          if (sp.href) spObj.href = sp.href;
+          if (sp.resource) spObj.resource = sp.resource;
+          if (sp.cfi) spObj.cfi = sp.cfi;
+          if (sp.path) spObj.path = sp.path;
+          if (sp.chapterTitle) spObj.chapterTitle = sp.chapterTitle || entry.chapterTitle;
+          if (Object.keys(spObj).length) pages.push(spObj);
+        });
+      }
+    });
+  } catch (e) { /* ignore */ }
+  return pages;
+}
 window.addEventListener('message', (e) => {
   if (e.data && e.data.type === 'DIG_METADATA_SNIFFED') {
     const meta = window.sniffedMetadata;
     if (e.data.url.includes('books.json')) meta.books = e.data.data;
     if (e.data.url.includes('pages.json')) meta.pages = e.data.data;
-    if (e.data.url.includes('pagebreaks')) meta.pagebreaks = e.data.data;
+    if (e.data.url.includes('pagebreaks')) {
+      meta.pagebreaks = e.data.data;
+      try {
+        const norm = normalizePagebreaksToPages(e.data.data);
+        if (norm && norm.length) {
+          // prefer pagebreaks-derived pages first so they drive labels/navigation
+          meta.pages = (Array.isArray(meta.pages) ? meta.pages : []).concat(norm);
+          digLog(`Normalized ${norm.length} pagebreak entries into pages`);
+        }
+      } catch (err) { }
+    }
     digLog(`Metadata sniffed: ${e.data.url.split('/').pop()}`);
+  }
+
+  // postMessage-based navigation fallback: dispatch ArrowRight in top window
+  if (e.data && e.data.type === 'DIG_NAVIGATE_NEXT') {
+    try {
+      const topDoc = (window.top && window.top.document) ? (window.top.document.body || window.top.document) : (document.body || document);
+      topDoc.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39, bubbles: true, cancelable: true }));
+    } catch (err) {
+      try { (document.body || document).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39, bubbles: true, cancelable: true })); } catch (e) { }
+    }
   }
 });
 

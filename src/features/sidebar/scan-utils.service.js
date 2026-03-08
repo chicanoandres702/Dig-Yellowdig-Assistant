@@ -1,6 +1,165 @@
 /**
  * Scan Utilities: Surgical content extraction for VitalSource and standard pages.
  */
+// CFI helpers (lightweight, pragmatic helpers — not a full CFI evaluator)
+function _safeDecode(s) {
+    try {
+        if (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.safeDecode === 'function') {
+            return window.DIG_CFI.safeDecode(s);
+        }
+        return decodeURIComponent(String(s));
+    } catch (e) { return String(s); }
+}
+
+function extractSpineIndex(urlOrCfi) {
+    if (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.extractSpineIndex === 'function') {
+        try { return window.DIG_CFI.extractSpineIndex(urlOrCfi); } catch (e) { /* fallback */ }
+    }
+    if (!urlOrCfi) return null;
+    const s = _safeDecode(urlOrCfi);
+    const m1 = s.match(/epubcfi\/6\/(\d+)/);
+    if (m1) return parseInt(m1[1], 10);
+    const m2 = s.match(/\/6\/(\d+)/);
+    if (m2) return parseInt(m2[1], 10);
+    const m3 = s.match(/epubcfi\([^)]*\/6\/(\d+)/);
+    if (m3) return parseInt(m3[1], 10);
+    return null;
+}
+
+function cfiMatchesUrl(rawCfi, url) {
+    if (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.cfiMatchesUrl === 'function') {
+        try { return window.DIG_CFI.cfiMatchesUrl(rawCfi, url); } catch (e) { /* fallback */ }
+    }
+    if (!rawCfi || !url) return false;
+    try {
+        const raw = String(rawCfi);
+        const decoded = _safeDecode(raw);
+        if (decoded && url.includes(decoded)) return true;
+        const stripped = decoded.replace(/^epubcfi\(?/i, '').replace(/\)?$/, '');
+        if (stripped && url.includes(stripped)) return true;
+        if (url.includes(raw)) return true;
+    } catch (e) { /* ignore */ }
+    return false;
+}
+
+// Parse a minimal CFI-like string into spine index and numeric intra-document steps.
+function parseCfiEntry(raw) {
+    // prefer central implementation if available
+    if (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.parseCfiEntry === 'function') {
+        try { return window.DIG_CFI.parseCfiEntry(raw); } catch (e) { /* fallback */ }
+    }
+    try {
+        const s = _safeDecode(String(raw || '')).trim();
+        const norm = s.replace(/^epubcfi\(?/i, '').replace(/\)?$/, '');
+        const parts = norm.split('!');
+        let spine = null;
+        const m = parts[0] && parts[0].match(/\/6\/(\d+)/);
+        if (m) spine = parseInt(m[1], 10);
+        const steps = [];
+        if (parts[1]) {
+            const segs = parts[1].split('/').filter(Boolean);
+            for (const seg of segs) {
+                const nm = String(seg).match(/^(\d+)/);
+                if (nm) steps.push(parseInt(nm[1], 10));
+            }
+        }
+        return { spine, steps, normalized: norm };
+    } catch (e) { return { spine: null, steps: [], normalized: String(raw || '') }; }
+}
+
+function _compareSteps(a, b) {
+    if (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.compareSteps === 'function') {
+        try { return window.DIG_CFI.compareSteps(a, b); } catch (e) { /* fallback */ }
+    }
+    const A = Array.isArray(a) ? a : [];
+    const B = Array.isArray(b) ? b : [];
+    const L = Math.max(A.length, B.length);
+    for (let i = 0; i < L; i++) {
+        const ai = (typeof A[i] === 'number') ? A[i] : -1;
+        const bi = (typeof B[i] === 'number') ? B[i] : -1;
+        if (ai !== bi) return ai - bi;
+    }
+    return 0;
+}
+
+// Find the best matching pagebreak/pages entry for a given top URL
+function findMatchingPagebreakEntry(pagesPayload, topUrl) {
+    // prefer central implementation if present
+    if (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.findMatchingPagebreakEntry === 'function') {
+        try { return window.DIG_CFI.findMatchingPagebreakEntry(pagesPayload, topUrl); } catch (e) { /* fallback */ }
+    }
+    try {
+        let pbList = [];
+        if (!pagesPayload) return null;
+        if (Array.isArray(pagesPayload)) pbList = pagesPayload;
+        else if (pagesPayload && Array.isArray(pagesPayload.pages)) pbList = pagesPayload.pages;
+        else if (pagesPayload && typeof pagesPayload === 'object') pbList = Object.values(pagesPayload).filter(v => v && typeof v === 'object');
+
+        const url = topUrl || (window.top && window.top.location && window.top.location.href) || window.location.href || '';
+
+        // 1) Exact cfiWithoutAssertions match (preferred)
+        for (const p of pbList) {
+            try {
+                if (!p) continue;
+                if (p.cfiWithoutAssertions && cfiMatchesUrl(p.cfiWithoutAssertions, url)) return { entry: p, reason: 'cfiWithoutAssertions' };
+            } catch (e) { }
+        }
+
+        // 2) Exact cfi match
+        for (const p of pbList) {
+            try {
+                if (!p) continue;
+                if (p.cfi && cfiMatchesUrl(p.cfi, url)) return { entry: p, reason: 'cfi' };
+            } catch (e) { }
+        }
+
+        // 3) Resource/url/path/href match
+        for (const p of pbList) {
+            try {
+                if (!p) continue;
+                if (p.absoluteURL && url.includes(String(p.absoluteURL))) return { entry: p, reason: 'absoluteURL' };
+                if (p.url && url.includes(String(p.url))) return { entry: p, reason: 'url' };
+                if (p.href && url.includes(String(p.href))) return { entry: p, reason: 'href' };
+                if (p.resource && url.includes(String(p.resource))) return { entry: p, reason: 'resource' };
+                if (p.path && url.includes(String(p.path))) return { entry: p, reason: 'path' };
+            } catch (e) { }
+        }
+
+        // 4) Spine-based fallback: find entries with the same spine index
+        const spine = extractSpineIndex(url) || null;
+        if (spine != null) {
+            const candidates = pbList.map(p => ({ p, parsed: parseCfiEntry(p.cfiWithoutAssertions || p.cfi || '') }))
+                .filter(it => it.parsed && it.parsed.spine === spine);
+            if (candidates.length === 1) return { entry: candidates[0].p, reason: 'spine' };
+            if (candidates.length > 1) {
+                // choose minimal/earliest lexicographic steps (resource-level entries usually have empty steps)
+                candidates.sort((a, b) => _compareSteps(a.parsed.steps, b.parsed.steps));
+                return { entry: candidates[0].p, reason: 'spine-closest', candidates: candidates.map(c => c.p) };
+            }
+        }
+
+        return null;
+    } catch (e) { return null; }
+}
+
+// Diagnostic helper: run matching against provided payload and optional URL
+function runPagebreakDiagnostic(pagesPayload, testUrl) {
+    // prefer centralized diagnostic if available
+    if (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.runPagebreakDiagnostic === 'function') {
+        try { return window.DIG_CFI.runPagebreakDiagnostic(pagesPayload, testUrl); } catch (e) { /* fallback */ }
+    }
+    try {
+        const url = testUrl || (window.top && window.top.location && window.top.location.href) || window.location.href;
+        const result = findMatchingPagebreakEntry(pagesPayload, url);
+        if (!result) {
+            console.info('Pagebreak diagnostic: no match found for', url);
+            return null;
+        }
+        console.info('Pagebreak diagnostic: matched reason=', result.reason, 'entry=', result.entry);
+        return result;
+    } catch (e) { console.error('Diagnostic error', e); return null; }
+}
+
 async function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
     const custom = overrideSelector || localStorage.getItem('dig_custom_reader_selector');
     const includeImages = forceIncludeImages !== undefined ? forceIncludeImages : (localStorage.getItem('dig_include_images') === 'true');
@@ -98,18 +257,20 @@ async function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
                     text: (await extractOrderedContent(el, includeImages)).substring(0, 15000),
                     html: clone.innerHTML
                 };
-                // try to read a VitalSource page number input if present (wait briefly for it)
+                // Determine page label from sniffed metadata (pagebreaks/pages) instead of reading input fields
                 try {
-                    let pg = document.querySelector('input[id^="text-field-"]');
-                    if (!pg) {
-                        // wait up to 300ms for input to appear
-                        const start = Date.now();
-                        while (!pg && Date.now() - start < 300) {
-                            await new Promise(r => setTimeout(r, 50));
-                            pg = document.querySelector('input[id^="text-field-"]');
+                    const m = window.sniffedMetadata;
+                    const topUrl = window.top?.location?.href || window.location.href;
+                    const payload = m && (m.pages || m.pagebreaks || m) ? (m.pages || m.pagebreaks || m) : null;
+                    if (payload) {
+                        // prefer centralized matcher when available
+                        const matcher = (typeof window !== 'undefined' && window.DIG_CFI && typeof window.DIG_CFI.findMatchingPagebreakEntry === 'function') ? window.DIG_CFI.findMatchingPagebreakEntry : findMatchingPagebreakEntry;
+                        const res = matcher(payload, topUrl);
+                        if (res && res.entry) {
+                            const e = res.entry;
+                            data.page = e.label || e.page || e.page_label || e.pageLabel || e.title || null;
                         }
                     }
-                    if (pg && pg.value) data.page = pg.value;
                 } catch (e) { }
 
                 // IF it's a cover page and we still have no images, try a surgical strike on original DOM

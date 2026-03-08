@@ -63,37 +63,46 @@ async function exportToPDF(title, contentArray, textOnly = false) {
         metaY += 4;
         doc.text(`${contentArray.length} pages captured`, pw / 2, metaY, { align: 'center' });
 
-        // Extract and list chapters (metadata)
-        const chapters = new Set();
-        sorted.forEach(item => { if (item.chapter) chapters.add(item.chapter); });
+        // Extract and list chapters (metadata) along with their first page labels when available
+        const chapterFirstPage = {};
+        sorted.forEach((item, idx) => {
+            const ch = item.chapter || 'Chapter Unknown';
+            if (!chapterFirstPage[ch]) {
+                chapterFirstPage[ch] = (item.page != null) ? String(item.page) : String(idx + 1);
+            }
+        });
 
         let chY = metaY + 15;
         doc.setFontSize(12);
         doc.setTextColor(0);
-        if (chapters.size > 0) doc.text('Contents:', margin, chY);
+        const chapters = Object.keys(chapterFirstPage);
+        if (chapters.length > 0) doc.text('Contents:', margin, chY);
 
         doc.setFontSize(10);
         doc.setTextColor(100);
         chY += 8;
-        Array.from(chapters).slice(0, 20).forEach(ch => {
-            const cLines = doc.splitTextToSize(`• ${ch}`, pw - 2 * margin);
+        chapters.slice(0, 20).forEach(ch => {
+            const label = chapterFirstPage[ch];
+            const cLines = doc.splitTextToSize(`• ${ch} — ${label}`, pw - 2 * margin);
             doc.text(cLines, margin, chY);
             chY += 6 * cLines.length;
         });
-        if (chapters.size > 20) doc.text(`...and ${chapters.size - 20} more chapters`, margin, chY);
+        if (chapters.length > 20) doc.text(`...and ${chapters.length - 20} more chapters`, margin, chY);
 
         for (let i = 0; i < sorted.length; i++) {
             doc.addPage();
             await renderPageToPDF(doc, sorted[i], i, margin, pw, ph, textOnly);
-        // add simple footer so PDF pages can be cross‑checked with source index/order
-        const pageNum = i + 1; // first content page is 1 (cover is separate)
-        let footer = `Page ${pageNum}`;
-        if (sorted[i].order != null) {
-            footer += ` (orig ${sorted[i].order})`;
+            // add simple footer so PDF pages can be cross‑checked with source index/order
+            const pageLabel = (sorted[i].page != null) ? String(sorted[i].page) : String(i + 1);
+            let footer = `Page ${pageLabel}`;
+            if (sorted[i].order != null) {
+                footer += ` (orig ${sorted[i].order})`;
+            }
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.text(footer, pw / 2, ph - margin / 2, { align: 'center' });
         }
-        doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.text(footer, pw / 2, ph - margin / 2, { align: 'center' });    }    } catch (err) {
+    } catch (err) {
         console.error('exportToPDF exception', err);
         alert('An error occurred while generating the PDF: ' + (err.message || err));
         // rethrow so callers can handle fallback
@@ -106,12 +115,18 @@ async function renderPageToPDF(doc, item, idx, margin, pw, ph, textOnly) {
     let y = margin;
 
     // chapter header
+    const pageLabel = (item.page != null) ? String(item.page) : String(idx + 1);
+    // print chapter on the left and page label on the right (if present)
     if (item.chapter) {
         doc.setFontSize(10);
         doc.setTextColor(80);
         // put header slightly above the main content
         doc.text(`${item.chapter}`, margin, y);
+        try { doc.text(pageLabel, pw - margin, y, { align: 'right' }); } catch (e) { }
         y += 8; // space reserved for header
+    } else {
+        // still print page label in the header area to help cross-reference with pagebreaks
+        try { doc.setFontSize(10); doc.setTextColor(80); doc.text(pageLabel, pw - margin, y, { align: 'right' }); } catch (e) { }
     }
 
     // Render HTML if available, otherwise fall back to text

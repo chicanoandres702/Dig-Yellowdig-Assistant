@@ -63,7 +63,7 @@ function saveBookPage(cls, bookTitle, chapter, pageData) {
     if (!kb[cls]) kb[cls] = {};
     if (!kb[cls][bookTitle]) kb[cls][bookTitle] = [];
 
-    let { text, html, force } = typeof pageData === 'object' ? pageData : { text: pageData, html: '', force: false };
+    let { text, html, force, page: pageLabel } = typeof pageData === 'object' ? pageData : { text: pageData, html: '', force: false };
     // allow forced saves (eg. page number only) even if text is short/empty
     if ((!text || text.length < 20) && !force) return;
     // ensure stored content includes explicit page-break markers
@@ -84,7 +84,8 @@ function saveBookPage(cls, bookTitle, chapter, pageData) {
 
     // Extract spine/section order from URL for sorting
     const url = window.top?.location?.href || window.location.href;
-    const spineMatch = url.match(/epubcfi\/6\/(\d+)/);
+    // support both path-style epubcfi/6/N and bare /6/N CFI fragments
+    const spineMatch = url.match(/epubcfi\/6\/(\d+)/) || url.match(/\/6\/(\d+)/);
     const sectMatch = url.match(/sect[_-]?(\d+)[_-]?(\d+)/);
     let order = Date.now(); // fallback: timestamp order
     if (spineMatch) order = parseInt(spineMatch[1]);
@@ -93,7 +94,7 @@ function saveBookPage(cls, bookTitle, chapter, pageData) {
     let meta = {};
     if (typeof getBookMetadata === 'function') meta = getBookMetadata();
 
-    kb[cls][bookTitle].push({ text, html, type: 'book-page', chapter, ts: Date.now(), order, meta });
+    kb[cls][bookTitle].push({ text, html, type: 'book-page', chapter, ts: Date.now(), order, meta, page: pageLabel != null ? pageLabel : null, url });
     const ok = safeSaveKB(kb);
     if (!ok) {
         alert('Knowledge base storage full – some pages may have been discarded.');
