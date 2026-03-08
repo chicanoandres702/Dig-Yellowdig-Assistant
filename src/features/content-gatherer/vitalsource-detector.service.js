@@ -14,6 +14,35 @@ function detectVitalSourceChapter() {
 
     // Sniffed Metadata Priority (pages.json)
     const metadata = window.sniffedMetadata;
+    // Sniffed Metadata Priority (pagebreaks) - some VitalSource installs expose pagebreaks mapping
+    if (metadata && metadata.pagebreaks) {
+        const topUrl = window.top?.location?.href || url;
+        let pbList = [];
+        const pb = metadata.pagebreaks;
+        if (Array.isArray(pb)) pbList = pb;
+        else if (pb && Array.isArray(pb.pages)) pbList = pb.pages;
+        else if (pb && typeof pb === 'object') {
+            const vals = Object.values(pb).filter(v => v && typeof v === 'object' && (v.absoluteURL || v.cfi || v.path || v.href || v.url || v.resource || v.chapterTitle || v.title || v.label));
+            if (vals.length) pbList = vals;
+        }
+
+        if (pbList.length) {
+            const matchedPb = pbList.find(p => {
+                return (p.absoluteURL && topUrl.includes(p.absoluteURL)) ||
+                    (p.cfi && topUrl.includes(p.cfi)) ||
+                    (p.path && topUrl.includes(p.path)) ||
+                    (p.href && topUrl.includes(p.href)) ||
+                    (p.url && topUrl.includes(p.url)) ||
+                    (p.resource && topUrl.includes(p.resource));
+            });
+
+            if (matchedPb && (matchedPb.chapterTitle || matchedPb.title || matchedPb.label || matchedPb.pageTitle || matchedPb.pageLabel)) {
+                const ch = matchedPb.chapterTitle || matchedPb.title || matchedPb.label || matchedPb.pageTitle || matchedPb.pageLabel;
+                digLog(`Chapter detected from sniffed pagebreaks: ${ch}`);
+                return ch.trim();
+            }
+        }
+    }
     if (metadata && metadata.pages && Array.isArray(metadata.pages)) {
         const topUrl = window.top?.location?.href || url;
         const matchedPage = metadata.pages.find(p => {

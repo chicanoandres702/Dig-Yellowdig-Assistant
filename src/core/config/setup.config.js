@@ -1,7 +1,7 @@
 /**
  * Shared constants and global state for the Dig Assistant extension.
  */
-window.sniffedMetadata = window.sniffedMetadata || { books: null, pages: null };
+window.sniffedMetadata = window.sniffedMetadata || { books: null, pages: null, pagebreaks: null };
 window.detectedClass = 'Unknown Class';
 window.detectedWeek = 'Week 1';
 

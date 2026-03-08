@@ -53,6 +53,7 @@ function renderBookScanTab(container) {
       const hasImages = text.includes('![');
       const textPreview = escapeHtml(text.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 160));
       preview.innerHTML = `<p style="font-size:11px;color:#334155;">${textPreview}${hasImages ? ' <b style="color:#10b981;">[+Images]</b>' : ''}...</p>`;
+      try { preview.dataset.digHasContent = textPreview.trim().length ? '1' : ''; } catch (e) { }
     }
     const saveBtn = document.getElementById('dig-book-save');
     if (saveBtn) { saveBtn.disabled = false; saveBtn.activeData = data; }
@@ -84,8 +85,9 @@ function renderBookScanTab(container) {
     </div>
     <div style="display:flex;flex-direction:column;gap:6px;">
       <button id="dig-book-save" style="background:${PRIMARY_COLOR};color:white;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:12px;font-weight:bold;" ${isEmpty ? 'disabled' : ''}>💾 Save Page</button>
-      <div style="gap:4px;display:flex;">
-        <button id="dig-book-auto" style="flex:2;background:#8b5cf6;color:white;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">▶️ Auto-Scan</button>
+      <div style="gap:8px;display:flex;align-items:center;">
+        <button id="dig-book-auto" style="flex:0 0 auto;background:#8b5cf6;color:white;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">▶️ Auto-Scan</button>
+        <span id="dig-auto-status" style="font-size:11px;color:#64748b;margin-left:8px;">Idle</span>
       </div>
       <div style="gap:4px;display:flex;">
         <button id="dig-book-pick" style="flex:2;background:#3b82f6;color:white;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">🎯 Pick Reader</button>
@@ -93,6 +95,14 @@ function renderBookScanTab(container) {
         <button id="dig-book-refresh" style="flex:1;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">🔄 Refresh</button>
       </div>
     </div>`;
+
+  // mark preview dataset based on whether we have initial content
+  setTimeout(() => {
+    try {
+      const previewInit = document.getElementById('dig-scan-preview');
+      if (previewInit) { previewInit.dataset.digHasContent = isEmpty ? '' : '1'; }
+    } catch (e) { }
+  }, 0);
 
   document.getElementById('dig-book-refresh').onclick = () => renderBookScanTab(container);
   document.getElementById('dig-include-images').onchange = (e) => localStorage.setItem('dig_include_images', e.target.checked);
@@ -145,6 +155,7 @@ function renderBookScanTab(container) {
             const hasImages = text.includes('![');
             const textPreview = escapeHtml(text.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 160));
             previewEl.innerHTML = `<p style="font-size:11px;color:#334155;">${textPreview}${hasImages ? ' <b style="color:#10b981;">[+Images]</b>' : ''}...</p>`;
+            try { previewEl.dataset.digHasContent = textPreview.trim().length ? '1' : ''; } catch (e) { }
           }
           if (saveBtn) { saveBtn.disabled = false; saveBtn.activeData = data; }
         }
@@ -178,8 +189,11 @@ function renderBookScanTab(container) {
           if (chrome && chrome.runtime && chrome.runtime.id) {
             chrome.runtime.sendMessage({ type: 'NAVIGATE_TO_NEXT_PAGE', prevSavedCount, cls: detectedClass, bookTitle });
           } else {
-            // fallback: dispatch ArrowRight in this context
-            try { (document.body || document).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39, bubbles: true })); } catch (e) { }
+            // fallback: dispatch ArrowRight to the top window if possible (better for SPA readers)
+            try {
+              const topDoc = (window.top && window.top.document) ? (window.top.document.body || window.top.document) : (document.body || document);
+              topDoc.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39, bubbles: true }));
+            } catch (e) { }
           }
         } catch (e) { }
       }

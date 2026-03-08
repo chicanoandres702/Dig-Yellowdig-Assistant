@@ -7,7 +7,7 @@
     window.fetch = async (...args) => {
         const response = await originalFetch(...args);
         const url = args[0] instanceof Request ? args[0].url : args[0];
-        if (url.includes('books.json') || url.includes('pages.json')) {
+        if (url.includes('books.json') || url.includes('pages.json') || url.includes('pagebreaks')) {
             const clone = response.clone();
             clone.json().then(data => {
                 window.postMessage({ type: 'DIG_METADATA_SNIFFED', url, data }, '*');
@@ -25,7 +25,7 @@
     const originalSend = XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.send = function () {
         this.addEventListener('load', function () {
-            if (this._url && (this._url.includes('books.json') || this._url.includes('pages.json'))) {
+            if (this._url && (this._url.includes('books.json') || this._url.includes('pages.json') || this._url.includes('pagebreaks'))) {
                 try {
                     const data = JSON.parse(this.responseText);
                     window.postMessage({ type: 'DIG_METADATA_SNIFFED', url: this._url, data }, '*');

@@ -2,33 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <style>
-        body { width: 350px; font-family: 'Inter', sans-serif; padding: 15px; margin: 0; background: #f8fafc; }
-        .header { text-align: center; margin-bottom: 15px; }
-        .header h1 { font-size: 18px; color: #064e3b; margin: 0; }
-        .card { background: white; border-radius: 12px; padding: 12px; border: 1px solid #e2e8f0; margin-bottom: 10px; }
-        .input-group { margin-bottom: 10px; }
-        label { display: block; font-size: 11px; font-weight: bold; color: #64748b; margin-bottom: 4px; }
-        input[type="text"] { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
-        button { width: 100%; background: #10b981; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        button:hover { background: #059669; }
-        .footer { font-size: 10px; text-align: center; color: #94a3b8; margin-top: 10px; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dig Assistant</title>
+    <link rel="stylesheet" href="popup.css">
 </head>
 <body>
     <div class="header">
         <h1>Dig Assistant</h1>
     </div>
-    <button id="saveBtn">Save Settings</button>
+    <button id="saveBtn" class="btn btn-primary">Save Settings</button>
     
     <div class="card">
         <div class="input-group">
-            <label>GEMINI API KEY</label>
+            <label for="apiKey">GEMINI API KEY</label>
             <input type="text" id="apiKey" placeholder="Paste your key here...">
         </div>
         <div class="input-group">
-            <label>AI Backend</label>
-            <select id="apiSelect">
+            <label for="apiSelect">AI Backend</label>
+            <select id="apiSelect" aria-label="AI Backend">
                 <option value="gemini">Gemini</option>
                 <option value="copilot">Copilot</option>
             </select>
@@ -37,21 +28,21 @@
 
     <div class="card">
         <label>RESOURCES</label>
-        <p style="font-size: 12px; color: #475569;">The Dig toolbar is active on Yellowdig. Use the "Context" button to upload your PDFs.</p>
+        <p class="muted">The Dig toolbar is active on Yellowdig. Use the "Context" button to upload your PDFs.</p>
     </div>
 
     <div class="card" id="diagnostics-card">
         <label>DIAGNOSTICS</label>
-        <p style="font-size:12px;color:#475569;margin-top:6px;">Download or stream debug logs for troubleshooting or to send to an external diagnostic endpoint (MCP/webhook).</p>
+        <p class="muted mt-6">Download or stream debug logs for troubleshooting or to send to an external diagnostic endpoint (MCP/webhook).</p>
         <div class="input-group">
-            <label>Stream URL (optional)</label>
+            <label for="streamUrl">Stream URL (optional)</label>
             <input type="text" id="streamUrl" placeholder="https://example.local/logs">
         </div>
-        <button id="toggleStreamBtn" style="background:#2563eb;">Start Streaming Logs</button>
-        <button id="downloadLogsBtn" style="margin-top:8px;background:#3b82f6;">Download Logs</button>
-        <button id="getPageReportBtn" style="margin-top:8px;background:#06b6d4;">Get Page Report</button>
-        <button id="copyDiagBtn" style="margin-top:8px;background:#64748b;">Copy Diagnostics</button>
-        <button id="clearLogsBtn" style="margin-top:8px;background:#ef4444;">Clear Logs</button>
+        <button id="toggleStreamBtn" class="btn btn-stream">Start Streaming Logs</button>
+        <button id="downloadLogsBtn" class="btn btn-blue mt-8">Download Logs</button>
+        <button id="getPageReportBtn" class="btn btn-azure mt-8">Get Page Report</button>
+        <button id="copyDiagBtn" class="btn btn-gray mt-8">Copy Diagnostics</button>
+        <button id="clearLogsBtn" class="btn btn-red mt-8">Clear Logs</button>
     </div>
 
     <div class="footer">Social Work & Sociology Resource Hub</div>
