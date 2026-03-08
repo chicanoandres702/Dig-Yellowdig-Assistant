@@ -24,16 +24,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             chrome.scripting.executeScript({
                 target: { tabId: tid, allFrames: true },
                 func: async (sel, incImg) => {
-                    if (typeof getVitalSourcePageText === 'function') {
-                        const data = await getVitalSourcePageText(sel, incImg);
-                        if (data) {
-                            const text = typeof data === 'object' ? data.text : data;
-                            const html = typeof data === 'object' ? data.html : '';
-                            if (text && text.length >= 20) {
-                                chrome.runtime.sendMessage({ type: 'FRAME_CONTENT_REPORT', text, html });
+                    try {
+                        if (typeof getVitalSourcePageText === 'function') {
+                            const data = await getVitalSourcePageText(sel, incImg);
+                            if (data && chrome.runtime?.id) {
+                                const text = typeof data === 'object' ? data.text : data;
+                                const html = typeof data === 'object' ? data.html : '';
+                                if (text && text.length >= 20) {
+                                    chrome.runtime.sendMessage({ type: 'FRAME_CONTENT_REPORT', text, html });
+                                }
                             }
                         }
-                    }
+                    } catch (e) { }
                 },
                 args: [request.customSelector, request.includeImages]
             });
@@ -47,7 +49,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             chrome.tabs.sendMessage(tid, request);
             chrome.scripting.executeScript({
                 target: { tabId: tid, allFrames: true },
-                func: (type) => window.postMessage({ type }, '*'),
+                func: (type) => {
+                    try { window.postMessage({ type }, '*'); } catch (e) { }
+                },
                 args: [request.type]
             });
         });

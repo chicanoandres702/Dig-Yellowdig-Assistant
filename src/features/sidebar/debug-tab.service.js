@@ -21,11 +21,17 @@ function renderDebugTab(container) {
         terminal.scrollTop = terminal.scrollHeight;
     };
 
-    chrome.runtime.sendMessage({ type: 'GET_DEBUG_LOGS' }, updateLogs);
+    if (chrome.runtime?.id) {
+        chrome.runtime.sendMessage({ type: 'GET_DEBUG_LOGS' }, updateLogs);
+    }
 
-    // Listen for new logs while tab is open
-    const listener = (msg) => { if (msg.type === 'NEW_LOG_EVENT') chrome.runtime.sendMessage({ type: 'GET_DEBUG_LOGS' }, updateLogs); };
-    chrome.runtime.onMessage.addListener(listener);
+    const listener = (msg) => {
+        if (!chrome.runtime?.id) return;
+        if (msg.type === 'NEW_LOG_EVENT') {
+            chrome.runtime.sendMessage({ type: 'GET_DEBUG_LOGS' }, updateLogs);
+        }
+    };
+    if (chrome.runtime?.id) chrome.runtime.onMessage.addListener(listener);
 
     document.getElementById('dig-debug-copy').onclick = async () => {
         const report = await getDiagnosticReport();

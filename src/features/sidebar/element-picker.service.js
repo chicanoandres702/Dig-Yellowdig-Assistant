@@ -4,9 +4,10 @@
 let isPickerActive = false, hoverEl = null;
 
 function startPickingElement(onSelect) {
+    if (!chrome.runtime?.id) return;
     chrome.runtime.sendMessage({ type: 'DIG_START_PICKING' });
     const handler = (msg) => {
-        if (!msg || typeof msg !== 'object') return;
+        if (!chrome.runtime?.id || !msg || typeof msg !== 'object') return;
         if (msg.type === 'DIG_ELEMENT_SELECTED') {
             chrome.runtime.onMessage.removeListener(handler);
             onSelect(msg.selector);
@@ -17,12 +18,13 @@ function startPickingElement(onSelect) {
 
 function initPickerListeners() {
     const onMsg = (msg) => {
-        if (!msg || typeof msg !== 'object') return;
+        if (!chrome.runtime?.id || !msg || typeof msg !== 'object') return;
         if (msg.type === 'DIG_START_PICKING') activateLocalPicker();
         if (msg.type === 'DIG_STOP_PICKING') deactivateLocalPicker();
     };
-    chrome.runtime.onMessage.addListener(onMsg);
-    window.addEventListener('message', (e) => onMsg(e.data)); // Dual-channel sync
+    if (chrome.runtime?.id) {
+        chrome.runtime.onMessage.addListener(onMsg);
+    }
 }
 
 function activateLocalPicker() {
@@ -49,12 +51,16 @@ function handleMove(e) {
 }
 
 function handleClick(e) {
-    if (!isPickerActive || e.target.tagName === 'IFRAME') return;
+    if (!isPickerActive || e.target.closest('#dig-sidebar, #dig-fab') || e.target.tagName === 'IFRAME') return;
     e.preventDefault(); e.stopPropagation();
-    const selector = generateSelector(e.target);
-    digLog(`Element selected in this frame: ${selector}`);
-    chrome.runtime.sendMessage({ type: 'DIG_STOP_PICKING' });
-    chrome.runtime.sendMessage({ type: 'DIG_ELEMENT_SELECTED', selector });
+    let el = e.target;
+    if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.closest('nav')) el = el.parentElement || el;
+    const selector = generateSelector(el);
+    digLog(`Element selected: ${selector}`);
+    if (chrome.runtime?.id) {
+        chrome.runtime.sendMessage({ type: 'DIG_STOP_PICKING' });
+        chrome.runtime.sendMessage({ type: 'DIG_ELEMENT_SELECTED', selector });
+    }
 }
 
 

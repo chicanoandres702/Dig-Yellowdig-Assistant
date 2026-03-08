@@ -74,19 +74,25 @@ window.addEventListener('popstate', () => {
 });
 
 // Messaging for frame content extraction
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === 'GET_SCAN_CONTENT' && isVitalSourcePage()) {
-    getVitalSourcePageText().then(data => {
-      sendResponse(typeof data === 'object' ? data : { text: data, html: '' });
-    });
-    return true; // Keep channel open for async response
-  }
-});
+if (chrome.runtime?.id) {
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (!chrome.runtime?.id) return;
+    if (msg.type === 'GET_SCAN_CONTENT' && isVitalSourcePage()) {
+      getVitalSourcePageText().then(data => {
+        if (chrome.runtime?.id) sendResponse(typeof data === 'object' ? data : { text: data, html: '' });
+      });
+      return true; // Keep channel open for async response
+    }
+  });
+}
 
 function injectSniffer() {
+  if (!chrome.runtime?.id) return;
   const script = document.createElement('script');
-  script.src = chrome.runtime.getURL('src/features/sidebar/metadata-sniffer.js');
-  (document.head || document.documentElement).appendChild(script);
+  try {
+    script.src = chrome.runtime.getURL('src/features/sidebar/metadata-sniffer.js');
+    (document.head || document.documentElement).appendChild(script);
+  } catch (e) { }
 }
 
 

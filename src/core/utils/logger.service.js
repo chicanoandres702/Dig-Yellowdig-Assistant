@@ -19,12 +19,23 @@ function digLog(msg, data = null) {
 }
 
 async function getDiagnosticReport() {
+    let debugLogs = [];
+    try {
+        if (chrome.runtime?.id) {
+            debugLogs = await new Promise(res => {
+                chrome.runtime.sendMessage({ type: 'GET_DEBUG_LOGS' }, (r) => {
+                    if (chrome.runtime.lastError) res([]); else res(r || []);
+                });
+            });
+        }
+    } catch (e) { }
+
     const report = {
         timestamp: new Date().toISOString(),
         topUrl: window.location.href,
         userAgent: navigator.userAgent,
         customSelector: localStorage.getItem('dig_custom_reader_selector'),
-        logs: await new Promise(res => chrome.runtime.sendMessage({ type: 'GET_DEBUG_LOGS' }, res))
+        logs: debugLogs
     };
     return JSON.stringify(report, null, 2);
 }
