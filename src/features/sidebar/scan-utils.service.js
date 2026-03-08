@@ -46,10 +46,11 @@ async function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
 
                 // IF it's a cover page and we still have no images, try a surgical strike
                 if (isCoverPage && !data.text.includes('![')) {
-                    digLog('Cover page detected but no image found yet. Searching specifically for large images/backgrounds.');
-                    const coverImg = document.querySelector('img[src*="cover"], [class*="cover"] img, [id*="cover"] img, .cover-image');
+                    digLog('Cover page detected but no image found yet. Searching specifically for large images/backgrounds/canvas.');
+                    const coverImg = document.querySelector('img[src*="cover"], [class*="cover"] img, [id*="cover"] img, .cover-image, canvas[class*="cover"], svg[class*="cover"]');
                     if (coverImg) {
-                        const src = coverImg.src || coverImg.getAttribute('data-src');
+                        const tag = coverImg.tagName;
+                        const src = tag === 'CANVAS' ? 'canvas-cover' : (coverImg.src || coverImg.getAttribute('data-src') || coverImg.getAttribute('href') || coverImg.getAttribute('xlink:href'));
                         if (src) {
                             const dataUrl = await imageToDataUrl(coverImg, src);
                             data.text = `![Cover](${dataUrl || src})\n\n` + data.text;
@@ -113,6 +114,9 @@ async function extractOrderedContent(root, includeImages) {
                         const nested = node.querySelector('image');
                         if (nested) src = nested.getAttribute('href') || nested.getAttribute('xlink:href') || (nested.href ? (typeof nested.href === 'string' ? nested.href : nested.href.baseVal) : null);
                     }
+                } else if (tag === 'CANVAS') {
+                    src = 'canvas-active'; // Sentinel to trigger imageToDataUrl for canvas
+                    alt = 'Canvas Snapshot';
                 } else {
                     // Check for background-image
                     try {
@@ -126,7 +130,7 @@ async function extractOrderedContent(root, includeImages) {
                     } catch (e) { }
                 }
 
-                if (src && src.length > 5 && !src.startsWith('chrome-extension:')) {
+                if (src && (src.length > 5 || tag === 'CANVAS') && !src.startsWith('chrome-extension:')) {
                     imgCount++;
                     digLog(`[${imgCount}] Found ${tag}: ${src.substring(0, 40)}...`);
                     const dataUrl = await imageToDataUrl(node, src);

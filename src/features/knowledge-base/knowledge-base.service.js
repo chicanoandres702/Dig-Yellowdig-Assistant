@@ -36,9 +36,9 @@ function renderKBClassItems(div, kb, cls, root) {
             html += `<div style="display:flex;justify-content:space-between;align-items:center;padding-left:14px;margin-bottom:8px;">
                 <p style="font-size:11px;color:#666;margin:0;">Captured ${items.length} pages</p>
                 <div style="display:flex;gap:4px;">
-                      <button class="dig-kb-export-html" data-class="${cls}" data-book="${topic}" style="background:#3b82f6;color:white;border:none;border-radius:4px;padding:4px 8px;font-size:10px;cursor:pointer;">📥 HTML</button>
-                      <button class="dig-kb-export" data-class="${cls}" data-book="${topic}" style="background:${PRIMARY_COLOR};color:white;border:none;border-radius:4px;padding:4px 8px;font-size:10px;cursor:pointer;">📥 PDF</button>
-                      <button class="dig-kb-delete-book" data-class="${cls}" data-book="${topic}" style="background:#ef4444;color:white;border:none;border-radius:4px;padding:4px 8px;font-size:10px;cursor:pointer;">🗑️ Delete</button>
+                      <button class="dig-kb-export-html" data-cls="${cls}" data-topic="${topic}" style="background:#3b82f6;color:white;border:none;border-radius:4px;padding:4px 8px;font-size:10px;cursor:pointer;">📥 HTML</button>
+                      <button class="dig-kb-export" data-cls="${cls}" data-topic="${topic}" style="background:${PRIMARY_COLOR};color:white;border:none;border-radius:4px;padding:4px 8px;font-size:10px;cursor:pointer;">📥 PDF</button>
+                      <button class="dig-kb-delete-book" data-cls="${cls}" data-topic="${topic}" style="background:#ef4444;color:white;border:none;border-radius:4px;padding:4px 8px;font-size:10px;cursor:pointer;">🗑️ Delete</button>
                     </div>
                   </div>`;
 
@@ -62,18 +62,29 @@ function renderKBClassItems(div, kb, cls, root) {
         }
     });
     div.innerHTML = html;
-    div.querySelectorAll('.dig-kb-export-book').forEach(btn => {
+
+    div.querySelectorAll('.dig-kb-export').forEach(btn => {
         btn.onclick = () => {
             const kbData = JSON.parse(localStorage.getItem('digKnowledgeBase') || '{}');
             const content = kbData[btn.dataset.cls]?.[btn.dataset.topic] || [];
             exportToPDF(btn.dataset.topic, content);
         };
     });
-    div.querySelectorAll('.dig-kb-delete-topic').forEach(btn => {
+
+    div.querySelectorAll('.dig-kb-export-html').forEach(btn => {
         btn.onclick = () => {
-            if (!confirm(`Delete all ${kb[btn.dataset.cls][btn.dataset.topic].length} pages for this book?`)) return;
-            delete kb[btn.dataset.cls][btn.dataset.topic];
-            if (!Object.keys(kb[btn.dataset.cls]).length) delete kb[btn.dataset.cls];
+            const kbData = JSON.parse(localStorage.getItem('digKnowledgeBase') || '{}');
+            const content = kbData[btn.dataset.cls]?.[btn.dataset.topic] || [];
+            exportToHTML(btn.dataset.topic, content);
+        };
+    });
+
+    div.querySelectorAll('.dig-kb-delete-book').forEach(btn => {
+        btn.onclick = () => {
+            const c = btn.dataset.cls, t = btn.dataset.topic;
+            if (!confirm(`Delete all ${kb[c][t].length} pages for this book?`)) return;
+            delete kb[c][t];
+            if (!Object.keys(kb[c]).length) delete kb[c];
             localStorage.setItem('digKnowledgeBase', JSON.stringify(kb));
             renderKnowledgeTab(root);
         };
