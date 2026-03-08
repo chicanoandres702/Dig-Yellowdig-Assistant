@@ -12,8 +12,23 @@ function detectVitalSourceClass() {
 function detectVitalSourceChapter() {
     const url = window.location.href;
 
-    // Sniffed Metadata Priority
+    // Sniffed Metadata Priority (pages.json)
     const metadata = window.sniffedMetadata;
+    if (metadata && metadata.pages && Array.isArray(metadata.pages)) {
+        const topUrl = window.top?.location?.href || url;
+        const matchedPage = metadata.pages.find(p => {
+            return (p.absoluteURL && topUrl.includes(p.absoluteURL)) ||
+                (p.cfi && topUrl.includes(p.cfi)) ||
+                (p.path && topUrl.includes(p.path));
+        });
+
+        if (matchedPage && matchedPage.chapterTitle) {
+            digLog(`Chapter detected from sniffed pages.json: ${matchedPage.chapterTitle}`);
+            return matchedPage.chapterTitle.trim();
+        }
+    }
+
+    // Sniffed Metadata Priority (books.json fallback)
     if (metadata && metadata.books) {
         const toc = metadata.books.table_of_contents || [];
         const currentId = url.split('/').pop().split(/[?#]/)[0];
@@ -49,8 +64,28 @@ function detectVitalSourceChapter() {
 }
 
 function getBookTitle() {
+    const metadata = window.sniffedMetadata;
+    // Prefer true title from books.json if available
+    if (metadata && metadata.books && metadata.books.books && metadata.books.books.length > 0) {
+        return metadata.books.books[0].title;
+    }
+
     const header = document.querySelector('h3[class*="khVOMu"], .book-title-header, h1');
     const title = header?.innerText?.trim() || (document.title || '').replace(/Capella:|VitalSource:|[-|].*/gi, '').trim() || 'Textbook';
     digLog(`Detected Book Title: ${title}`);
     return title;
+}
+
+function getBookMetadata() {
+    const metadata = window.sniffedMetadata;
+    if (metadata && metadata.books && metadata.books.books && metadata.books.books.length > 0) {
+        const b = metadata.books.books[0];
+        return {
+            author: b.author || '',
+            isbn: b.isbn || '',
+            edition: b.edition || '',
+            publisherId: b.publisherId || ''
+        };
+    }
+    return { author: '', isbn: '', edition: '', publisherId: '' };
 }

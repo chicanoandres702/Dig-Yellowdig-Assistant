@@ -33,17 +33,17 @@ function startAutoScan(container) {
     if (isAutoScanning) { isAutoScanning = false; if (btn) btn.innerText = '▶️ Auto-Scan'; return; }
     isAutoScanning = true;
     let pageCount = 0;
+    const bookTitle = getBookTitle();
+    const incImg = localStorage.getItem('dig_include_images') === 'true';
+    const customSel = localStorage.getItem('dig_custom_reader_selector');
 
     const navigateNext = () => {
-        digLog(`Navigating to Page ${pageCount + 1} via Arrow/Button`);
         const nav = (win) => {
-            // 1. Keyboard Event
             const target = win.document.querySelector('#pbk-page, #pfe-content, .epub-content, body') || win.document.body;
             ['keydown', 'keyup'].forEach(type => {
                 target.dispatchEvent(new KeyboardEvent(type, { key: 'ArrowRight', keyCode: 39, bubbles: true, cancelable: true }));
                 win.dispatchEvent(new KeyboardEvent(type, { key: 'ArrowRight', keyCode: 39, bubbles: true }));
             });
-            // 2. Physical Button Click (Surgical strike)
             const nextBtn = win.document.querySelector('button[aria-label*="Next"], .next-button, .vst-icon-arrow-right');
             if (nextBtn) nextBtn.click();
         };
@@ -51,51 +51,76 @@ function startAutoScan(container) {
         document.querySelectorAll('iframe').forEach(f => { try { nav(f.contentWindow); } catch (e) { } });
     };
 
+    let lastTextSig = '';
+
+    // Turbo: request content from frames, save directly, navigate immediately
     const scanNext = async () => {
         if (!isAutoScanning || !chrome.runtime?.id) return;
         pageCount++;
-        if (btn) btn.innerText = `🛑 Scanning (Page ${pageCount})...`;
+        if (btn) btn.innerText = `🛑 Stop (${pageCount})`;
 
-        let attempts = 0, saveBtn = document.getElementById('dig-book-save');
-        // Faster polling: 100ms instead of 1000ms
-        while (isAutoScanning && attempts++ < 30 && (!saveBtn || saveBtn.disabled)) {
-            if (btn && attempts % 5 === 0) btn.innerText = `⏳ Waiting (Page ${pageCount})... [${Math.floor(attempts / 5)}/6s]`;
-            await new Promise(r => setTimeout(r, 200));
-            saveBtn = document.getElementById('dig-book-save');
+        // Request content from all frames repeatedly until we get NEW content
+        let captured = false;
+
+        const reqInterval = setInterval(() => {
+            if (isAutoScanning && !captured && chrome.runtime?.id) {
+                chrome.runtime.sendMessage({ type: 'BROADCAST_TO_FRAMES', customSelector: customSel, includeImages: incImg });
+            }
+        }, 100); // Ask every 100ms
+
+        const handler = (msg) => {
+            if (!isAutoScanning || captured) return;
+            if (msg.type === 'FRAME_CONTENT_REPORT' && msg.text?.length > 20) {
+                const sig = msg.text.substring(0, 200);
+                if (sig !== lastTextSig) { // Wait for DOM to actually change!
+                    captured = true;
+                    lastTextSig = sig;
+                    const chapter = detectVitalSourceChapter();
+                    saveBookPage(detectedClass, bookTitle, chapter, { text: msg.text, html: msg.html || '' });
+                    digLog(`Page ${pageCount} saved`);
+                }
+            }
+        };
+
+        chrome.runtime.onMessage.addListener(handler);
+
+        // Wait max 3s for new content to appear
+        let wait = 0;
+        while (isAutoScanning && !captured && wait < 3000) {
+            await new Promise(r => setTimeout(r, 50));
+            wait += 50;
         }
 
-        if (isAutoScanning && saveBtn && !saveBtn.disabled) {
-            if (btn) btn.innerText = `💾 Saving (Page ${pageCount})...`;
-            saveBtn.click();
-            digLog(`Page ${pageCount} saved`);
-            // Brief pause to let it save
-            await new Promise(r => setTimeout(r, 600));
-        } else if (isAutoScanning) {
-            digLog(`Page ${pageCount} skipped (unready)`);
+        clearInterval(reqInterval);
+        if (chrome.runtime?.id) chrome.runtime.onMessage.removeListener(handler);
+
+        if (!captured && isAutoScanning) {
+            digLog(`Page ${pageCount} skipped (no new content detected after 3s)`);
         }
+        if (!isAutoScanning) return;
+
+        // Navigate immediately
+        navigateNext();
+
+        // Wait for URL change or 1s max
+        let navigated = false;
+        const onNav = () => { navigated = true; };
+        window.addEventListener('DIG_PAGE_CHANGED', onNav, { once: true });
+
+        let navWait = 0;
+        while (isAutoScanning && !navigated && navWait < 1000) {
+            await new Promise(r => setTimeout(r, 50));
+            navWait += 50;
+        }
+        window.removeEventListener('DIG_PAGE_CHANGED', onNav);
 
         if (isAutoScanning) {
-            navigateNext();
-
-            // Wait for navigation event OR timeout (faster than fixed 4s)
-            let navigated = false;
-            const onNav = () => { navigated = true; };
-            window.addEventListener('DIG_PAGE_CHANGED', onNav, { once: true });
-
-            // Max wait 3s for navigation, but proceed immediately if event fires
-            let navWait = 0;
-            while (isAutoScanning && !navigated && navWait < 3000) {
-                await new Promise(r => setTimeout(r, 200));
-                navWait += 200;
-            }
-            window.removeEventListener('DIG_PAGE_CHANGED', onNav);
-
-            if (isAutoScanning) {
-                if (typeof refreshSidebar === 'function') refreshSidebar();
-                scanNext();
-            }
+            // A microscopic delay to allow the DOM to render the new page
+            await new Promise(r => setTimeout(r, 50));
+            scanNext();
         }
     };
+
     scanNext();
 }
 

@@ -80,8 +80,6 @@ function renderBookScanTab(container) {
       <button id="dig-book-save" style="background:${PRIMARY_COLOR};color:white;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:12px;font-weight:bold;" ${isEmpty ? 'disabled' : ''}>💾 Save Page</button>
       <div style="gap:4px;display:flex;">
         <button id="dig-book-auto" style="flex:2;background:#8b5cf6;color:white;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">▶️ Auto-Scan</button>
-        <button id="dig-book-export" style="flex:1;background:#10b981;color:white;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">📄 PDF</button>
-        <button id="dig-book-export-html" style="flex:1;background:#3b82f6;color:white;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">🌐 HTML</button>
       </div>
       <div style="gap:4px;display:flex;">
         <button id="dig-book-pick" style="flex:2;background:#3b82f6;color:white;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">🎯 Pick Reader</button>
@@ -94,16 +92,6 @@ function renderBookScanTab(container) {
   document.getElementById('dig-include-images').onchange = (e) => localStorage.setItem('dig_include_images', e.target.checked);
   document.getElementById('dig-book-pick').onclick = () => startBookPicking(container, () => renderBookScanTab(container));
   document.getElementById('dig-book-auto').onclick = () => startAutoScan(container);
-  document.getElementById('dig-book-export').onclick = () => {
-    const kb = JSON.parse(localStorage.getItem('digKnowledgeBase') || '{}');
-    const content = kb[detectedClass]?.[bookTitle] || [];
-    exportToPDF(bookTitle, content);
-  };
-  document.getElementById('dig-book-export-html').onclick = () => {
-    const kb = JSON.parse(localStorage.getItem('digKnowledgeBase') || '{}');
-    const content = kb[detectedClass]?.[bookTitle] || [];
-    exportToHTML(bookTitle, content);
-  };
   document.getElementById('dig-view-full').onclick = () => {
     const btn = document.getElementById('dig-book-save');
     const text = btn.activeData ? btn.activeData.text : pageText;

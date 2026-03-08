@@ -39,12 +39,38 @@ async function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
         for (const s of selectors) {
             const el = document.querySelector(s);
             if (el && (el.innerText?.trim().length >= 20 || isCoverPage)) {
+
+                // Clone the element to safely mutate the HTML string for export
+                let clone = el.cloneNode(true);
+                if (includeImages) {
+                    const imgs = clone.querySelectorAll('img, svg, image');
+                    const promises = Array.from(imgs).map(async (img) => {
+                        let src = img.src || img.getAttribute('data-src') || img.getAttribute('href') || img.getAttribute('xlink:href');
+                        if (src && !src.startsWith('data:') && !src.startsWith('chrome-extension:')) {
+                            // Convert to absolute
+                            try { src = new URL(src, document.baseURI).href; } catch (e) { }
+
+                            // Force attributes so innerHTML serialization is absolute
+                            img.setAttribute('src', src);
+                            if (img.tagName !== 'IMG') img.setAttribute('href', src);
+
+                            // Attempt to get base64 data URL to embed in PDF
+                            const dataUrl = await imageToDataUrl(img, src);
+                            if (dataUrl) {
+                                img.setAttribute('src', dataUrl);
+                                if (img.tagName !== 'IMG') img.setAttribute('href', dataUrl);
+                            }
+                        }
+                    });
+                    await Promise.all(promises);
+                }
+
                 let data = {
                     text: (await extractOrderedContent(el, includeImages)).substring(0, 15000),
-                    html: el.innerHTML
+                    html: clone.innerHTML
                 };
 
-                // IF it's a cover page and we still have no images, try a surgical strike
+                // IF it's a cover page and we still have no images, try a surgical strike on original DOM
                 if (isCoverPage && !data.text.includes('![')) {
                     digLog('Cover page detected but no image found yet. Searching specifically for large images/backgrounds/canvas.');
                     const coverImg = document.querySelector('img[src*="cover"], [class*="cover"] img, [id*="cover"] img, .cover-image, canvas[class*="cover"], svg[class*="cover"]');
@@ -53,7 +79,10 @@ async function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
                         const src = tag === 'CANVAS' ? 'canvas-cover' : (coverImg.src || coverImg.getAttribute('data-src') || coverImg.getAttribute('href') || coverImg.getAttribute('xlink:href'));
                         if (src) {
                             const dataUrl = await imageToDataUrl(coverImg, src);
-                            data.text = `![Cover](${dataUrl || src})\n\n` + data.text;
+                            if (dataUrl) {
+                                data.text = `![Cover](${dataUrl})\n\n` + data.text;
+                                data.html = `<img src="${dataUrl}" style="max-width:100%;"><br>` + data.html;
+                            }
                         }
                     }
                 }

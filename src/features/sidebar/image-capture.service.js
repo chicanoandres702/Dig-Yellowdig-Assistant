@@ -74,21 +74,43 @@ async function extractOrderedContent(root, includeImages) {
 
 async function imageToDataUrl(el, src) {
     if (src && src.startsWith('data:')) return src;
+    let absoluteSrc = src;
     try {
         const doc = el.ownerDocument || document;
-        let img = el;
-        if (el.tagName === 'CANVAS') return el.toDataURL('image/webp', 0.8);
-        if (el.tagName !== 'IMG') {
-            img = new Image(); img.crossOrigin = 'Anonymous';
-            img.src = src.startsWith('/') ? new URL(src, doc.baseURI).href : src;
-            await new Promise((res, rej) => { img.onload = res; img.onerror = rej; setTimeout(rej, 2000); });
-        }
+        let img;
+        if (el.tagName === 'CANVAS') return el.toDataURL('image/jpeg', 0.8);
+
+        absoluteSrc = src.startsWith('/') ? new URL(src, doc.baseURI).href : src;
+
+        img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.src = absoluteSrc;
+
+        await new Promise((res, rej) => {
+            img.onload = res;
+            img.onerror = () => rej(new Error('CORS Load Failed'));
+            setTimeout(() => rej(new Error('Timeout')), 3000);
+        });
+
         const canvas = doc.createElement('canvas');
         canvas.width = img.naturalWidth || img.width || (el.getBoundingClientRect ? el.getBoundingClientRect().width : 100);
         canvas.height = img.naturalHeight || img.height || (el.getBoundingClientRect ? el.getBoundingClientRect().height : 100);
         if (canvas.width < 10 || canvas.height < 10) return null;
+
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        return canvas.toDataURL('image/webp', 0.8);
-    } catch (e) { digLog(`DataURL capture failed: ${e.message}`); return null; }
+        return canvas.toDataURL('image/jpeg', 0.8);
+    } catch (e) {
+        if (chrome.runtime?.id && absoluteSrc && !absoluteSrc.startsWith('data:')) {
+            digLog(`Canvas taint or load failure, proxying via background: ${absoluteSrc}`);
+            try {
+                const response = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'FETCH_IMAGE_AS_BASE64', url: absoluteSrc }, resolve));
+                if (response && response.dataUrl) return response.dataUrl;
+            } catch (err) {
+                digLog(`Background proxy failed: ${err.message}`);
+            }
+        }
+        digLog(`DataURL capture completely failed: ${e.message}`);
+        return null;
+    }
 }

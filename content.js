@@ -15,6 +15,14 @@ function updateContext() {
   const result = detectClassAndWeek();
   window.detectedClass = result.detectedClass;
   window.detectedWeek = result.detectedWeek;
+
+  // Sync API keys from extension storage to page localStorage for sidebar access
+  if (chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get(['gemini_api_key'], (res) => {
+      if (res.gemini_api_key) localStorage.setItem('gemini_api_key', res.gemini_api_key);
+    });
+  }
+
   return result;
 }
 

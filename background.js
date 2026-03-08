@@ -19,10 +19,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.type === 'BROADCAST_TO_FRAMES') {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            const tid = tabs[0]?.id;
-            if (!tid) return;
+            const tab = tabs[0];
+            if (!tab || !tab.id || tab.url?.startsWith('chrome://') || tab.url?.startsWith('edge://')) return;
             chrome.scripting.executeScript({
-                target: { tabId: tid, allFrames: true },
+                target: { tabId: tab.id, allFrames: true },
                 func: async (sel, incImg) => {
                     try {
                         if (typeof getVitalSourcePageText === 'function') {
@@ -38,27 +38,53 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     } catch (e) { }
                 },
                 args: [request.customSelector, request.includeImages]
-            });
+            }).catch(() => { }); // Catch and swallow executeScript errors (e.g., protected frames)
         });
     }
 
     if (request.type === 'DIG_START_PICKING' || request.type === 'DIG_STOP_PICKING') {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            const tid = tabs[0]?.id;
-            if (!tid) return;
-            chrome.tabs.sendMessage(tid, request);
+            const tab = tabs[0];
+            if (!tab || !tab.id || tab.url?.startsWith('chrome://') || tab.url?.startsWith('edge://')) return;
+            chrome.tabs.sendMessage(tab.id, request).catch(() => { });
             chrome.scripting.executeScript({
-                target: { tabId: tid, allFrames: true },
+                target: { tabId: tab.id, allFrames: true },
                 func: (type) => {
                     try { window.postMessage({ type }, '*'); } catch (e) { }
                 },
                 args: [request.type]
-            });
+            }).catch(() => { });
         });
     }
 
     if (request.type === 'DIG_ELEMENT_SELECTED' || request.type === 'FRAME_CONTENT_REPORT') {
         chrome.tabs.sendMessage(tabId, request);
+    }
+
+    if (request.type === 'FETCH_IMAGE_AS_BASE64') {
+        fetch(request.url)
+            .then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.blob();
+            })
+            .then(async (blob) => {
+                const buffer = await blob.arrayBuffer();
+                const bytes = new Uint8Array(buffer);
+
+                // Chunk the conversion to avoid Maximum Call Stack Size Exceeded on large images
+                const chunkSize = 8192;
+                let binary = '';
+                for (let i = 0; i < bytes.length; i += chunkSize) {
+                    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+                }
+
+                const b64 = btoa(binary);
+                sendResponse({ dataUrl: `data:${blob.type};base64,${b64}` });
+            })
+            .catch(err => {
+                sendResponse({ error: err.message });
+            });
+        return true; // Keep channel open for async response
     }
 
     return true;

@@ -30,7 +30,10 @@ function exportToHTML(title, contentArray) {
     <h1>${escapeHtml(title)}</h1>
     <div id="content">`;
 
-    contentArray.forEach((item, index) => {
+    // Sort by spine/section order
+    const sorted = [...contentArray].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    sorted.forEach((item, index) => {
         const timestamp = item.ts ? new Date(item.ts).toLocaleString() : 'Date Unknown';
         const chapter = item.chapter || 'Chapter Unknown';
 

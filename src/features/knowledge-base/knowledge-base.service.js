@@ -21,17 +21,26 @@ function saveBookPage(cls, bookTitle, chapter, pageData) {
     const { text, html } = typeof pageData === 'object' ? pageData : { text: pageData, html: '' };
     if (!text || text.length < 20) return;
 
-    // Simple de-duplication: check against last entry
+    // De-duplication: check against all existing entries
     const entries = kb[cls][bookTitle];
-    if (entries.length > 0) {
-        const last = entries[entries.length - 1];
-        if (last.text.substring(0, 200) === text.substring(0, 200)) {
-            digLog('Duplicate content detected, skipping save.');
-            return;
-        }
+    const sig = text.substring(0, 200);
+    if (entries.some(e => e.text.substring(0, 200) === sig)) {
+        digLog('Duplicate content detected, skipping save.');
+        return;
     }
 
-    kb[cls][bookTitle].push({ text, html, type: 'book-page', chapter, ts: Date.now() });
+    // Extract spine/section order from URL for sorting
+    const url = window.top?.location?.href || window.location.href;
+    const spineMatch = url.match(/epubcfi\/6\/(\d+)/);
+    const sectMatch = url.match(/sect[_-]?(\d+)[_-]?(\d+)/);
+    let order = Date.now(); // fallback: timestamp order
+    if (spineMatch) order = parseInt(spineMatch[1]);
+    else if (sectMatch) order = parseInt(sectMatch[1]) * 100 + parseInt(sectMatch[2]);
+
+    let meta = {};
+    if (typeof getBookMetadata === 'function') meta = getBookMetadata();
+
+    kb[cls][bookTitle].push({ text, html, type: 'book-page', chapter, ts: Date.now(), order, meta });
     localStorage.setItem('digKnowledgeBase', JSON.stringify(kb));
 }
 
