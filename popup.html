@@ -1,81 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Dig Assistant</title>
-    <!-- Modern Font Stack -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="src/core/styles/theme.css">
-    <link rel="stylesheet" href="popup.css">
+  <meta charset="UTF-8">
+  <title>PagePilot Launcher</title>
+  <style>
+    body { width: 250px; height: 120px; background: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0; text-align: center; }
+    .pulse { width: 20px; height: 20px; background: #38bdf8; border-radius: 50%; animation: pulse 1.5s infinite; margin-bottom: 12px; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(56, 189, 248, 0); } 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); } }
+    h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+    p { margin: 8px 0 0; font-size: 11px; color: #94a3b8; }
+  </style>
 </head>
-<body class="dig-amazing-theme">
-    <div class="popup-container">
-        <header class="header">
-            <div class="logo-area">
-                <span class="logo-pill">DIG</span>
-                <h1>Academic Assistant</h1>
-            </div>
-            <button id="saveBtn" class="btn btn-primary" title="Save all settings">
-                <span class="icon">💾</span> Save Settings
-            </button>
-        </header>
-        
-        <main class="content-area">
-            <section class="card glass">
-                <div class="card-header">
-                    <span class="label">CONFIG</span>
-                </div>
-                <div class="input-group">
-                    <label for="apiKey">Gemini API Key</label>
-                    <div class="input-wrapper">
-                        <input type="password" id="apiKey" placeholder="• • • • • • • • • • • • • • • •">
-                        <span class="input-icon">🔑</span>
-                    </div>
-                </div>
-                <div class="input-group">
-                    <label for="apiSelect">AI Provider</label>
-                    <select id="apiSelect" class="styled-select" aria-label="AI Backend">
-                        <option value="gemini">Google Gemini</option>
-                        <option value="copilot">GitHub Copilot</option>
-                    </select>
-                </div>
-            </section>
-
-            <section class="card info-card">
-                <div class="card-header">
-                    <span class="label">ACTIVE STATUS</span>
-                </div>
-                <p class="muted">
-                    <span class="status-indicator active"></span>
-                    Extension is active on Yellowdig. Use the <strong>Context</strong> button in the toolbar to upload materials.
-                </p>
-            </section>
-
-            <section class="card glass" id="diagnostics-card">
-                <div class="card-header">
-                    <span class="label">DIAGNOSTICS & LOGS</span>
-                </div>
-                <div class="input-group mt-4">
-                    <label for="streamUrl">Stream URL <span class="badge">Optional</span></label>
-                    <input type="text" id="streamUrl" placeholder="https://endpoint/logs">
-                </div>
-                <div class="btn-grid">
-                    <button id="toggleStreamBtn" class="btn btn-stream">Start Streaming</button>
-                    <button id="downloadLogsBtn" class="btn btn-blue">Download Logs</button>
-                    <button id="getPageReportBtn" class="btn btn-azure">Page Report</button>
-                    <button id="copyDiagBtn" class="btn btn-gray">Copy Diag</button>
-                    <button id="clearLogsBtn" class="btn btn-red">Clear All</button>
-                </div>
-            </section>
-        </main>
-
-        <footer class="footer">
-            <span class="footer-text">Social Work & Sociology Resource Hub</span>
-            <span class="version-tag">v2.1.0</span>
-        </footer>
-    </div>
-    
-    <script src="popup.js"></script>
+<body>
+  <div class="pulse"></div>
+  <h2>PagePilot</h2>
+  <p>Initializing Mission Control...</p>
+  <script src="popup.js"></script>
 </body>
 </html>

@@ -258,5 +258,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    // Forward structured agent actions to the active tab's content script.
+    // Caller (sidebar/dashboard) sends: { action: 'AGENT_ACTION', step: { ... } }
+    if (request && request.action === 'AGENT_ACTION') {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const tab = tabs && tabs[0];
+            if (!tab || !tab.id) {
+                try { sendResponse({ ok: false, error: 'No active tab' }); } catch (e) {}
+                return;
+            }
+            // Normalize step payload: prefer explicit request.step, otherwise strip action
+            const step = request.step || (() => {
+                const copy = Object.assign({}, request);
+                delete copy.action;
+                return copy;
+            })();
+
+            chrome.tabs.sendMessage(tab.id, { type: 'AGENT_ACTION', step }, (resp) => {
+                try { sendResponse(resp || { ok: true }); } catch (e) { /* swallow */ }
+            });
+        });
+        return true; // Keep channel open for async sendResponse
+    }
+
     return true;
 });

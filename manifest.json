@@ -1,122 +1,62 @@
 {
   "manifest_version": 3,
-  "name": "Dig - Academic Research Assistant",
-  "version": "2.1",
-  "description": "An AI-powered sociology assistant for reflections and peer responses on Yellowdig.",
+  "name": "PagePilot | Dig Yellowdig Assistant",
+  "version": "2.4.0",
+  "description": "An AI-powered academic assistant for extracting, bucketing, and drafting engagement posts.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
   "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
     "128": "icon.png"
   },
-  "permissions": [
-    "storage",
-    "clipboardWrite",
-    "scripting",
-    "contextMenus"
-  ],
   "background": {
-    "service_worker": "background.js"
-  },
-  "host_permissions": [
-    "https://*.yellowdig.app/*",
-    "https://generativelanguage.googleapis.com/*",
-    "https://*.capella.edu/*",
-    "https://*.vitalsource.com/*",
-    "<all_urls>"
-  ],
-  "action": {
-    "default_title": "Dig Assistant Settings"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "content_scripts": [
     {
       "matches": [
-        "https://*.yellowdig.app/*",
-        "https://*.capella.edu/*",
-        "https://*.vitalsource.com/*",
         "<all_urls>"
       ],
       "js": [
-        "html2canvas.min.js",
-        "jsPDF.min.js",
-        "src/core/config/setup.config.js",
-        "src/core/utils/storage.service.js",
-        "src/core/utils/logger.service.js",
-        "src/core/utils/ui-overlay.service.js",
-        "src/features/content-gatherer/vitalsource-detector.service.js",
-        "src/features/content-gatherer/content-gatherer.service.js",
-        "src/core/api/gemini-api.service.js",
-        "src/features/ai-assistant/ai-assistant.service.js",
-        "src/features/knowledge-base/kb-storage-core.service.js",
-        "src/features/knowledge-base/kb-shared-storage.service.js",
-        "src/features/knowledge-base/kb-pdf-utils.service.js",
-        "src/features/knowledge-base/knowledge-base.service.js",
-        "src/features/knowledge-base/kb/kb-tab-render.service.js",
-        "src/features/knowledge-base/kb/kb-upload-overlay.service.js",
-        "src/features/knowledge-base/kb/kb-upload-process.service.js",
-        "src/features/knowledge-base/kb/kb-upload-file-handlers.service.js",
-        "src/features/knowledge-base/kb/kb-header-migrate.service.js",
-        "src/features/knowledge-base/kb/kb-class-items.service.js",
-        "src/features/knowledge-base/kb/kb-class-item-events.service.js",
-        "src/features/knowledge-base/kb/kb-save-dialog.service.js",
-        "src/features/knowledge-base/kb/kb-save-dialog-helpers.service.js",
-        "src/features/knowledge-base/kb/kb-save-dialog-picker.service.js",
-        "src/features/knowledge-base/kb/kb-save-dialog-confirm.service.js",
-        "src/features/knowledge-base/kb-ui.service.js",
-        "src/features/sticky-notes/sticky-notes.service.js",
-        "src/features/sidebar/element-picker.service.js",
-        "src/features/sidebar/image-capture.service.js",
-        "src/features/sidebar/scan-utils.service.js",
-        "src/features/sidebar/scan/roman-numeral.service.js",
-        "src/features/sidebar/scan/reader-context.service.js",
-        "src/features/sidebar/scan/page-navigation.service.js",
-        "src/features/sidebar/scan/scan-preview.service.js",
-        "src/features/sidebar/scan/scan-save-helper.service.js",
-        "src/features/sidebar/scan/pagebreak-splitter-helpers.service.js",
-        "src/features/sidebar/scan/pagebreak-splitter.service.js",
-        "src/features/sidebar/scan/scan-loop-helpers.service.js",
-        "src/features/sidebar/scan/scan-iteration.service.js",
-        "src/features/sidebar/scan/scan-loop.service.js",
-        "src/features/sidebar/scan/floating-toolbar.service.js",
-        "src/features/sidebar/scan/floating-toolbar-events.service.js",
-        "src/features/sidebar/scan/floating-toolbar-handlers.service.js",
-        "src/features/sidebar/scan-actions.service.js",
-        "src/features/sidebar/scan-tab.service.js",
-        "src/features/sidebar/pdf-v2-export.service.js",
-        "src/features/sidebar/html-export-utils.service.js",
-        "src/features/sidebar/html-export.service.js",
-        "src/features/sidebar/debug-tab.service.js",
-        "src/features/sidebar/draft-utils.service.js",
-        "src/features/sidebar/draft/draft-storage.service.js",
-        "src/features/sidebar/draft/yellowdig-dom.service.js",
-        "src/features/sidebar/draft/context-menu.service.js",
-        "src/features/sidebar/draft/draft-generation.service.js",
-        "src/features/sidebar/draft/draft-saved-list-ui.service.js",
-        "src/features/sidebar/draft/draft-ui-helpers.service.js",
-        "src/features/sidebar/draft/draft-ui.service.js",
-        "src/features/sidebar/draft/draft-events-handlers.service.js",
-        "src/features/sidebar/draft/draft-events.service.js",
-        "src/features/sidebar/settings-tab.service.js",
-        "src/features/sidebar/sidebar-panel.service.js",
         "content.js"
       ],
-      "run_at": "document_idle",
-      "all_frames": true
+      "css": [
+        "src/core/styles/theme.css",
+        "src/features/sidebar/sidebar-theme.css"
+      ],
+      "run_at": "document_idle"
     }
+  ],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "contextMenus",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://generativelanguage.googleapis.com/*",
+    "https://*.yellowdig.app/*",
+    "https://*.vitalsource.com/*"
   ],
   "web_accessible_resources": [
     {
       "resources": [
+        "web-assistant.html",
+        "topographic_waves.html",
         "icon.png",
-        "response-tool.html",
-        "html2canvas.min.js",
-        "jsPDF.min.js",
         "pdf.min.mjs",
-        "pdf.js",
-        "src/core/styles/theme.css",
-        "src/features/sidebar/metadata-sniffer.js"
+        "pdf.js.worker.min.mjs"
       ],
       "matches": [
-        "https://*.yellowdig.app/*",
-        "https://*.capella.edu/*",
-        "https://*.vitalsource.com/*",
         "<all_urls>"
       ]
     }
