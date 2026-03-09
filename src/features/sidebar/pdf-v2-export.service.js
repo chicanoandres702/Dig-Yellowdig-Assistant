@@ -129,9 +129,29 @@ async function renderPageToPDF(doc, item, idx, margin, pw, ph, textOnly) {
         try { doc.setFontSize(10); doc.setTextColor(80); doc.text(pageLabel, pw - margin, y, { align: 'right' }); } catch (e) { }
     }
 
+    // Resolve remote content if referenced by contentRef
+    const fetchContentRef = (ref) => new Promise((resolve) => {
+        try {
+            if (window.chrome && chrome.storage && chrome.storage.local && ref) {
+                chrome.storage.local.get(ref, (res) => {
+                    try { resolve(res && res[ref] ? res[ref] : null); } catch (e) { resolve(null); }
+                });
+            } else resolve(null);
+        } catch (e) { resolve(null); }
+    });
+
     // Render HTML if available, otherwise fall back to text
-    const html = item.html || '';
-    const text = item.text || '';
+    let html = item.html || '';
+    let text = item.text || '';
+    if ((!html || html.length < 30) && (!text || text.length < 30) && item.contentRef) {
+        try {
+            const got = await fetchContentRef(item.contentRef);
+            if (got) {
+                html = got.html || html;
+                text = got.text || text;
+            }
+        } catch (e) { /* ignore */ }
+    }
 
     if (!textOnly && html && html.length > 30) {
         await renderHTMLToDoc(doc, html, margin, y, pw, ph);

@@ -3,33 +3,112 @@
  */
 let isRawMode = false;
 
-function renderScanTab(container) {
+async function renderScanTab(container) {
+  try { if (typeof createFloatingToolbar === 'function') createFloatingToolbar(); } catch (e) { }
   if (isVitalSourcePage()) { renderBookScanTab(container); return; }
-  const blocks = scanPageContent(isRawMode);
-  const toggleBtn = `<button id="dig-raw-toggle" style="background:${isRawMode ? '#ef4444' : '#f1f5f9'};color:${isRawMode ? 'white' : '#475569'};border:none;border-radius:4px;padding:4px 8px;cursor:pointer;font-size:10px;margin-bottom:8px;">${isRawMode ? 'Disable Raw' : '🔍 Raw Scan'}</button>`;
+  const blocks = await scanPageContent(isRawMode);
+  const toggleBtn = `<button id="dig-raw-toggle" style="background:${isRawMode ? 'var(--em-700)' : 'var(--glass-1)'};color:var(--em-100);border:var(--border-glass);border-radius:99px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:600;transition:all 200ms var(--ease-out-quint);">${isRawMode ? 'Disable Raw' : '🔍 Raw Scan'}</button>`;
+
+  const currentSel = localStorage.getItem('dig_custom_reader_selector') || '';
+  const useDefault = localStorage.getItem('dig_use_default_save') === 'true';
+  const pickControls = `<div style="display:flex;align-items:center;gap:8px;">
+      <button id="dig-scan-pick" style="background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-size:11px;font-weight:600;transition:var(--transition-fast);">🎯 Pick</button>
+      <button id="dig-scan-set-default" style="background:var(--warning);color:white;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-size:11px;font-weight:600;transition:var(--transition-fast);">⭐ Default</button>
+      <button id="dig-scan-reset" style="background:var(--danger);color:white;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-size:11px;font-weight:600;${currentSel ? '' : 'display:none;'}">🗑️ Reset</button>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);cursor:pointer;"> <input type="checkbox" id="dig-use-default-save" ${useDefault ? 'checked' : ''} style="accent-color:var(--primary);" /> Use default</label>
+    </div>`;
 
   if (!blocks.length) {
-    container.innerHTML = `<div style="text-align:center;padding:20px;">${toggleBtn}<p style="color:#666;font-size:12px;">No content detected.</p></div>`;
+    container.innerHTML = `<div style="text-align:center;padding:24px 0;">${toggleBtn}<div style="margin-top:16px;">${pickControls}</div><p style="color:var(--text-muted);font-size:13px;margin-top:20px;">No content detected.</p>${currentSel ? `<div style="margin-top:12px;font-size:12px;color:var(--text-muted);">Selector: <code style="background:var(--bg-card);padding:4px 8px;border-radius:var(--radius-sm);border:var(--glass-border);">${escapeHtml(currentSel)}</code></div>` : ''}</div>`;
     document.getElementById('dig-raw-toggle').onclick = () => { isRawMode = !isRawMode; renderScanTab(container); };
+    // wire pick/set-default/reset and use-default checkbox
+    try {
+      const pick = document.getElementById('dig-scan-pick'); if (pick) pick.onclick = () => startPickingElement((sel) => { if (sel) localStorage.setItem('dig_custom_reader_selector', sel); renderScanTab(container); });
+      const setDef = document.getElementById('dig-scan-set-default'); if (setDef) setDef.onclick = () => {
+        try {
+          showSaveToBucketDialog('', { defaultCls: detectedClass, defaultTopic: 'Quick-Saves', isBook: false }, (cls, topic) => {
+            if (cls) localStorage.setItem('dig_default_save_cls', cls);
+            if (topic) localStorage.setItem('dig_default_save_topic', topic);
+            localStorage.setItem('dig_use_default_save', 'true');
+            alert('Default destination set to ' + cls + ' / ' + topic);
+            renderScanTab(container);
+          });
+        } catch (e) { console.error('set default failed', e); }
+      };
+      const reset = document.getElementById('dig-scan-reset'); if (reset) reset.onclick = () => { localStorage.removeItem('dig_custom_reader_selector'); renderScanTab(container); };
+      const useChk = document.getElementById('dig-use-default-save'); if (useChk) useChk.onchange = (e) => { localStorage.setItem('dig_use_default_save', e.target.checked ? 'true' : 'false'); };
+    } catch (e) { }
     return;
   }
-  let html = `<div style="display:flex;justify-content:space-between;align-items:center;">${toggleBtn}<p style="font-size:11px;color:#888;">Found ${blocks.length}</p></div>`;
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:var(--border-dim);">${toggleBtn}<div style="display:flex;align-items:center;gap:12px;"><p style="font-size:11px;color:var(--em-400);font-family:var(--font-mono);margin:0;">Found ${blocks.length}</p></div></div><div style="margin-bottom:16px;">${pickControls}</div>`;
   blocks.forEach((block, i) => {
-    html += `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px;margin-bottom:6px;">
-      <p style="font-size:11px;line-height:1.4;margin:0 0 6px;color:#334155;">${escapeHtml(block.text.substring(0, 120))}...</p>
-      <button class="dig-scan-save" data-idx="${i}" style="background:${PRIMARY_COLOR};color:white;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:10px;">💾 Save</button></div>`;
+    html += `<div class="scan-block" style="background:var(--glass-1);border:var(--border-glass);border-radius:12px;padding:14px;margin-bottom:12px;position:relative;overflow:hidden;transition:all 220ms var(--ease-out-quint);backdrop-filter:blur(20px);">
+      <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg, transparent, hsla(158,70%,60%,0.4), transparent);"></div>
+      <p style="font-size:12.5px;line-height:1.65;margin:0 0 12px;color:var(--em-100);opacity:0.85;">${escapeHtml(block.text.substring(0, 160))}...</p>
+      <button class="dig-scan-save save-btn" data-idx="${i}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
+        Save Block
+      </button></div>`;
   });
   container.innerHTML = html;
   document.getElementById('dig-raw-toggle').onclick = () => { isRawMode = !isRawMode; renderScanTab(container); };
+  // wire pick/set-default/reset and use-default checkbox
+  try {
+    const pick = document.getElementById('dig-scan-pick'); if (pick) pick.onclick = () => startPickingElement((sel) => { if (sel) localStorage.setItem('dig_custom_reader_selector', sel); renderScanTab(container); });
+    const setDef = document.getElementById('dig-scan-set-default'); if (setDef) setDef.onclick = () => {
+      try {
+        showSaveToBucketDialog('', { defaultCls: detectedClass, defaultTopic: 'Quick-Saves', isBook: false }, (cls, topic) => {
+          if (cls) localStorage.setItem('dig_default_save_cls', cls);
+          if (topic) localStorage.setItem('dig_default_save_topic', topic);
+          localStorage.setItem('dig_use_default_save', 'true');
+          alert('Default destination set to ' + cls + ' / ' + topic);
+          renderScanTab(container);
+        });
+      } catch (e) { console.error('set default failed', e); }
+    };
+    const reset = document.getElementById('dig-scan-reset'); if (reset) reset.onclick = () => { localStorage.removeItem('dig_custom_reader_selector'); renderScanTab(container); };
+    const useChk = document.getElementById('dig-use-default-save'); if (useChk) useChk.onchange = (e) => { localStorage.setItem('dig_use_default_save', e.target.checked ? 'true' : 'false'); };
+  } catch (e) { }
   container.querySelectorAll('.dig-scan-save').forEach(btn => {
     btn.onclick = () => {
-      saveToKnowledgeBase(blocks[parseInt(btn.dataset.idx)].text, detectedClass);
-      btn.innerText = '✅ Saved'; btn.disabled = true;
+      const idx = parseInt(btn.dataset.idx);
+      const text = blocks[idx].text;
+      const useDefaultSave = localStorage.getItem('dig_use_default_save') === 'true';
+      const defCls = localStorage.getItem('dig_default_save_cls');
+      const defTopic = localStorage.getItem('dig_default_save_topic');
+      const defUseShared = (localStorage.getItem('dig_default_save_use_shared') === 'true' || localStorage.getItem('dig_default_save_use_shared') === '1');
+      if (useDefaultSave && defCls && defTopic) {
+        try {
+          if (defUseShared && typeof saveToSharedKB === 'function') {
+            // attempt to save to the extension-shared KB first
+            saveToSharedKB(defCls, defTopic, text, { type: 'knowledge', html: '', force: false }).then(res => {
+              if (!res || !res.success) {
+                try { saveToBucket(defCls, defTopic, text, { type: 'knowledge', html: '', force: false }); } catch (e) { }
+              }
+            }).catch(() => { try { saveToBucket(defCls, defTopic, text, { type: 'knowledge', html: '', force: false }); } catch (e) { } });
+          } else {
+            saveToBucket(defCls, defTopic, text, { type: 'knowledge', html: '', force: false });
+          }
+          btn.innerText = '✅ Saved'; btn.disabled = true;
+          return;
+        } catch (e) { console.error('default save failed', e); }
+      }
+      // show dialog to pick class/topic
+      try {
+        showSaveToBucketDialog(text, { defaultCls: detectedClass, defaultTopic: 'Quick-Saves', isBook: false }, () => {
+          btn.innerText = '✅ Saved'; btn.disabled = true;
+        });
+      } catch (e) {
+        // fallback
+        saveToKnowledgeBase(text, detectedClass);
+        btn.innerText = '✅ Saved'; btn.disabled = true;
+      }
     };
   });
 }
 
 function renderBookScanTab(container) {
+  try { if (typeof createFloatingToolbar === 'function') createFloatingToolbar(); } catch (e) { }
   const bookTitle = getBookTitle(), chapter = detectVitalSourceChapter();
   const savedCount = getBookPageCount(detectedClass, bookTitle);
 
@@ -60,39 +139,40 @@ function renderBookScanTab(container) {
   });
 
   container.innerHTML = `
-    <div style="background:#f0fdf4;border:1px solid #a7f3d0;border-radius:8px;padding:10px;margin-bottom:8px;">
-      <p style="font-size:13px;font-weight:bold;color:${DARK_COLOR};margin:0 0 2px;">📖 ${escapeHtml(bookTitle)}</p>
-      <p style="font-size:11px;color:#666;margin:0;">${escapeHtml(chapter)} · ${savedCount} pages</p>
+    <div style="background:var(--primary-glow);border:var(--glass-border);border-radius:var(--radius-md);padding:16px;margin-bottom:16px;box-shadow:var(--shadow-sm);">
+      <p style="font-size:14px;font-weight:700;color:var(--primary-dark);margin:0 0 4px;">📖 ${escapeHtml(bookTitle)}</p>
+      <p style="font-size:12px;color:var(--text-muted);margin:0;opacity:0.8;">${escapeHtml(chapter)} · ${savedCount} pages</p>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-      <span style="font-size:11px;font-weight:bold;color:#64748b;">Preview</span>
-      <button id="dig-view-full" style="background:none;border:none;color:${PRIMARY_COLOR};cursor:pointer;font-size:10px;padding:0;">🔍 View Full Content</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.05em;text-transform:uppercase;">Preview</span>
+      <button id="dig-view-full" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:11px;font-weight:600;padding:0;transition:var(--transition-fast);">🔍 Full Content</button>
     </div>
-    <div id="dig-scan-preview" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px;margin-bottom:8px;max-height:80px;overflow:hidden;">
-      <p style="font-size:11px;color:#334155;line-height:1.4;margin:0;">${isEmpty ? '<i>Searching frames...</i>' : escapeHtml(pageText.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 200) + '...')}</p>
+    <div id="dig-scan-preview" style="background:var(--bg-card);border:var(--glass-border);border-radius:var(--radius-sm);padding:12px;margin-bottom:16px;max-height:100px;overflow:hidden;box-shadow:var(--shadow-sm);">
+      <p style="font-size:12px;color:var(--text-main);line-height:1.6;margin:0;">${isEmpty ? '<i>Searching academic frames...</i>' : escapeHtml(pageText.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 200) + '...')}</p>
     </div>
-    <div style="margin-bottom:8px;">
-      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#475569;cursor:pointer;">
-        <input type="checkbox" id="dig-include-images" ${localStorage.getItem('dig_include_images') === 'true' ? 'checked' : ''} style="accent-color:${PRIMARY_COLOR};">
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-main);cursor:pointer;">
+        <input type="checkbox" id="dig-include-images" ${localStorage.getItem('dig_include_images') === 'true' ? 'checked' : ''} style="accent-color:var(--primary);">
         Include Images in Scan
       </label>
-    </div>
-    <div style="margin-bottom:8px;">
-      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#475569;cursor:pointer;">
-        <input type="checkbox" id="dig-auto-advance" ${localStorage.getItem('dig_auto_advance') === 'true' ? 'checked' : ''} style="accent-color:${PRIMARY_COLOR};">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-main);cursor:pointer;">
+        <input type="checkbox" id="dig-auto-advance" ${localStorage.getItem('dig_auto_advance') === 'true' ? 'checked' : ''} style="accent-color:var(--primary);">
         Auto-advance after Save
       </label>
     </div>
-    <div style="display:flex;flex-direction:column;gap:6px;">
-      <button id="dig-book-save" style="background:${PRIMARY_COLOR};color:white;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:12px;font-weight:bold;" ${isEmpty ? 'disabled' : ''}>💾 Save Page</button>
-      <div style="gap:8px;display:flex;align-items:center;">
-        <button id="dig-book-auto" style="flex:0 0 auto;background:#8b5cf6;color:white;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">▶️ Auto-Scan</button>
-        <span id="dig-auto-status" style="font-size:11px;color:#64748b;margin-left:8px;">Idle</span>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <button id="dig-book-save" class="btn btn-primary" style="padding:12px;font-size:14px;" ${isEmpty ? 'disabled' : ''}>💾 Save Page</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button id="dig-book-auto" style="background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);padding:8px;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;">▶️ Auto-Scan</button>
+        <div style="display:flex;align-items:center;justify-content:center;background:var(--bg-card);border-radius:var(--radius-sm);border:var(--glass-border);"><span id="dig-auto-status" style="font-size:11px;color:var(--text-muted);font-weight:500;">Idle</span></div>
       </div>
-      <div style="gap:4px;display:flex;">
-        <button id="dig-book-pick" style="flex:2;background:#3b82f6;color:white;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">🎯 Pick Reader</button>
-        ${localStorage.getItem('dig_custom_reader_selector') ? `<button id="dig-book-reset" style="flex:1;background:#ef4444;color:white;border:none;border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">🗑️ Reset</button>` : ''}
-        <button id="dig-book-refresh" style="flex:1;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">🔄 Refresh</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button id="dig-book-pick" style="background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);padding:8px;cursor:pointer;font-size:12px;font-weight:600;">🎯 Reader</button>
+        <button id="dig-book-set-default" style="background:var(--warning);color:white;border:none;border-radius:var(--radius-sm);padding:8px;cursor:pointer;font-size:12px;font-weight:600;">⭐ Destination</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:rgba(0,0,0,0.02);border-radius:var(--radius-sm);">
+        <button id="dig-book-refresh" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px;">🔄 Refresh Preview</button>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;"><input type="checkbox" id="dig-use-default-save" ${localStorage.getItem('dig_use_default_save') === 'true' ? 'checked' : ''} style="accent-color:var(--primary);"/> Use default</label>
       </div>
     </div>`;
 
@@ -109,6 +189,22 @@ function renderBookScanTab(container) {
   const autoAdvanceCheckbox = document.getElementById('dig-auto-advance');
   if (autoAdvanceCheckbox) autoAdvanceCheckbox.onchange = (e) => localStorage.setItem('dig_auto_advance', e.target.checked);
   document.getElementById('dig-book-pick').onclick = () => startBookPicking(container, () => renderBookScanTab(container));
+  // Set Default wiring for book scan
+  try {
+    const setDef = document.getElementById('dig-book-set-default');
+    if (setDef) setDef.onclick = () => {
+      try {
+        showSaveToBucketDialog('', { defaultCls: detectedClass, defaultTopic: bookTitle, isBook: true }, (cls, topic) => {
+          if (cls) localStorage.setItem('dig_default_save_cls', cls);
+          if (topic) localStorage.setItem('dig_default_save_topic', topic);
+          localStorage.setItem('dig_use_default_save', 'true');
+          alert('Default destination set to ' + cls + ' / ' + topic);
+          renderBookScanTab(container);
+        });
+      } catch (e) { console.error('set default failed', e); }
+    };
+    const useChk = document.getElementById('dig-use-default-save'); if (useChk) useChk.onchange = (e) => { localStorage.setItem('dig_use_default_save', e.target.checked ? 'true' : 'false'); };
+  } catch (e) { }
   document.getElementById('dig-book-auto').onclick = () => startAutoScan(container);
   document.getElementById('dig-view-full').onclick = () => {
     const btn = document.getElementById('dig-book-save');
@@ -133,7 +229,7 @@ function renderBookScanTab(container) {
   };
   if (preview) {
     const obs = new MutationObserver(updateSaveState);
-    obs.observe(preview, {childList:true,subtree:true,characterData:true});
+    obs.observe(preview, { childList: true, subtree: true, characterData: true });
     // initial state
     updateSaveState();
   }
@@ -170,8 +266,38 @@ function renderBookScanTab(container) {
     // Ensure manual save forces a record even for short pages (user pressed Save)
     const saveObj = btn.activeData ? Object.assign({}, btn.activeData) : { text: pageText, html: '' };
     if (!saveObj.text || saveObj.text.length < 20) saveObj.force = true;
-    saveBookPage(detectedClass, bookTitle, chapter, saveObj);
-    btn.innerText = '✅ Saved!';
+    // Check if user enabled default destination; if so, save directly there
+    try {
+      const useDefaultSave = localStorage.getItem('dig_use_default_save') === 'true';
+      const defCls = localStorage.getItem('dig_default_save_cls');
+      const defTopic = localStorage.getItem('dig_default_save_topic');
+      const defUseShared = (localStorage.getItem('dig_default_save_use_shared') === 'true' || localStorage.getItem('dig_default_save_use_shared') === '1');
+      if (useDefaultSave && defCls && defTopic) {
+        // prefer extension-shared KB when configured
+        if (defUseShared && typeof saveToSharedKB === 'function') {
+          try {
+            await saveToSharedKB(defCls, defTopic, saveObj.text || '', { html: saveObj.html || '', type: 'book-page', chapter, force: saveObj.force || false });
+            btn.innerText = '✅ Saved!';
+          } catch (e) {
+            try { saveBookPage(defCls, defTopic, chapter, saveObj); btn.innerText = '✅ Saved!'; } catch (err) { console.error(err); }
+          }
+        } else {
+          saveBookPage(defCls, defTopic, chapter, saveObj);
+          btn.innerText = '✅ Saved!';
+        }
+      } else {
+        // Prompt user for destination bucket (allow saving to other class/topic)
+        try {
+          showSaveToBucketDialog(saveObj.text || saveObj, { defaultCls: detectedClass, defaultTopic: bookTitle, isBook: true, chapter, pageData: saveObj, html: saveObj.html, force: saveObj.force }, () => {
+            btn.innerText = '✅ Saved!';
+          });
+        } catch (e) {
+          // fallback
+          saveBookPage(detectedClass, bookTitle, chapter, saveObj);
+          btn.innerText = '✅ Saved!';
+        }
+      }
+    } catch (e) { console.error('book save failed', e); }
 
     // persist auto-advance preference
     const autoAdvance = localStorage.getItem('dig_auto_advance') === 'true';

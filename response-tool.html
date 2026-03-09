@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <script src="response-tool.js" defer></script>
+
+      const basePrompt = buildPostPrompt(pdfText, introText.value || '', lens);
+      const prompt = (sharedText && sharedText.trim().length) ? (`SHARED_KB_CONTEXT:\n${sharedText}\n\n` + basePrompt) : basePrompt;
+      const key = apiKeyInput.value.trim();
+      const persona = 'Dig — social work and sociology assistant';
+      const systemInstruction = `Tone: professional yet conversational. Use sociological lenses like Systems Theory and Strengths-Based. Keep it classroom-appropriate.`;
+      const out = await invokeModel(persona, prompt, key, systemInstruction);
+      postOutput.innerText = out.trim();
+      show(postOutput); savePostBtn.style.display='inline-block';
+      // ensure a copy button is available for the generated post
+      try{
+        let copyPostBtn = el('copyPostBtn');
+        if(!copyPostBtn){
+          copyPostBtn = document.createElement('button'); copyPostBtn.id='copyPostBtn'; copyPostBtn.className='copy-btn'; copyPostBtn.innerText='Click to Copy Post';
+          savePostBtn.parentNode.insertBefore(copyPostBtn, savePostBtn);
+        }
+        copyPostBtn.onclick = ()=>copyAndTryInsert(postOutput.innerText||'', copyPostBtn);
+      }catch(e){}
+      setStatus('postStatus','Ready');
+      savePostBtn.onclick = ()=>{
+        addEntry({ id:uid(), type:'post', createdAt:now(), headerText:'Yellowdig Post • ' + (lens||''), contentText: postOutput.innerText, source:'pdf' });
+        setStatus('saveMsg','Post saved');
+      };
+    }catch(e){ console.error(e); setStatus('postStatus','Error: '+ (e.message || e)); }
+  });
+
+  extractBtn.addEventListener('click', async ()=>{
+    try{
+      const f = screenshotFile.files && screenshotFile.files[0];
+      if(!f){ setStatus('ocrStatus','Choose an image first'); return; }
+      // If Tesseract isn't bundled, fall back to manual entry: reveal the fields and ask user to paste the text
+      if (typeof Tesseract === 'undefined' || !Tesseract || !Tesseract.createWorker) {
+        setStatus('ocrStatus','OCR not available in this build — paste post text or enter Name & Question manually.');
+        show(ocrPreview); show(el('saveRespBtn'));
+        ocrPreview.dataset.raw = '';
+        detectedName.value = '';
+        detectedQuestion.value = '';
+        return;
+      }
+      setStatus('ocrStatus','Running OCR...');
+      // Tesseract recognizes from file blob
+      const worker = Tesseract.createWorker({ logger:m=>{} });
+      await worker.load(); await worker.loadLanguage('eng'); await worker.initialize('eng');
+      const { data } = await worker.recognize(f);
+      await worker.terminate();
+      const text = data && data.text ? data.text : '';
+      const parsed = parseNameAndQuestion(text);
+      detectedName.value = parsed.name || '';
+      detectedQuestion.value = parsed.question || '';
+      show(ocrPreview); show(el('saveRespBtn'));
+      // stash raw
+      ocrPreview.dataset.raw = text;
+      setStatus('ocrStatus','OCR complete — review fields before generating.');
+    }catch(e){ console.error(e); setStatus('ocrStatus','OCR failed: '+ (e.message||e)); }
+  });
+
+  generateResponseBtn.addEventListener('click', async ()=>{
+    try{
+      setStatus('responseStatus','Calling model...');
+      const name = detectedName.value.trim();
+      const question = detectedQuestion.value.trim();
+      const ocrRaw = ocrPreview.dataset.raw || '';
+      if(!question){ setStatus('responseStatus','Please enter the question to respond to.'); return; }
+      // Include selected shared KB snippets (if enabled). If none selected, fall back to recent shared entries.
+      const includeSharedR = (el('sharedKbIncludeToggle') && el('sharedKbIncludeToggle').checked);
+      let sharedTextR = '';
+      if (includeSharedR) {
+        try { sharedTextR = getSelectedSharedText(8); } catch (e) { sharedTextR = ''; }
+        if (!sharedTextR) {
+          try {
+            setStatus('responseStatus','Loading shared knowledge...');
+            const sharedKB = await loadSharedKB();
+            const clsHint = _params.get('cls') || '';
+            const sc = buildSharedContextText(sharedKB, clsHint, 6);
+            if (sc && sc.count > 0) { sharedTextR = sc.text; setStatus('responseStatus', `Including ${sc.count} shared KB entries...`, 2000); }
+          } catch (e) { /* ignore */ }
+        }
+      }
+      const baseRespPrompt = buildResponsePrompt(name || 'Classmate', question, ocrRaw);
+      const prompt = (sharedTextR && sharedTextR.trim().length) ? (`SHARED_KB_CONTEXT:\n${sharedTextR}\n\n` + baseRespPrompt) : baseRespPrompt;
+      const key = apiKeyInput.value.trim();
+      const persona = 'Dig — social work and sociology assistant';
+      const sys = 'Tone: warm, respectful, classroom-appropriate. Greet the classmate by name and end with a follow-up question.';
+      const out = await invokeModel(persona, prompt, key, sys);
+      responseOutput.innerText = `Question: ${question} | Name: ${name}\n\n` + out.trim();
+      show(responseOutput); saveRespBtn.style.display='inline-block';
+      // ensure copy button exists for generated response
+      try{
+        let copyRespBtn = el('copyRespBtn');
+        if(!copyRespBtn){ copyRespBtn = document.createElement('button'); copyRespBtn.id='copyRespBtn'; copyRespBtn.className='copy-btn'; copyRespBtn.innerText='Click to Copy Response'; saveRespBtn.parentNode.insertBefore(copyRespBtn, saveRespBtn); }
+        copyRespBtn.onclick = ()=>copyAndTryInsert(out.trim() || '', copyRespBtn);
+      }catch(e){}
+      setStatus('responseStatus','Ready');
+      saveRespBtn.onclick = ()=>{
+        addEntry({ id:uid(), type:'response', createdAt:now(), headerText:`Question: ${question} | Name: ${name}`, contentText: out.trim(), source:'screenshot', rawSourceText:ocrRaw });
+        setStatus('saveMsg','Response saved');
+      };
+    }catch(e){ console.error(e); setStatus('responseStatus','Error: '+(e.message||e)); }
+  });
+
+  // Export: generate a single-file HTML (self-contained) that contains the saved responses for Canvas "Response Tool" import
+  exportBtn.addEventListener('click', ()=>{
+    const arr = loadEntries();
+    const htmlParts = ['<!doctype html>','<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dig Response Tool Export</title>',
+      '<style>body{font-family:Arial,Helvetica,sans-serif;margin:18px;background:#fff;color:#0f172a}pre{white-space:pre-wrap;font-size:14px;padding:10px;border:1px solid #e6eef6;background:#f8fafc;border-radius:8px}</style></head><body>',
+      '<h2>Dig — Exported Responses</h2>','<div>Use the "Click to Copy" buttons to copy each block into Canvas.</div>'];
+    arr.forEach(en=>{
+      htmlParts.push(`<h3>${(en.type==='post')? 'Yellowdig Post' : 'Peer Response'} • ${new Date(en.createdAt).toLocaleString()}</h3>`);
+      htmlParts.push(`<div><button onclick="(function(t){navigator.clipboard.writeText(t)})('${escapeHtmlForInline(en.headerText||'')}')">Click to Copy Header</button></div>`);
+      htmlParts.push(`<pre>${escapeHtml(en.contentText||'')}</pre>`);
+      htmlParts.push('<hr/>');
+    });
+    htmlParts.push('</body></html>');
+    const blob = new Blob([htmlParts.join('\n')], {type:'text/html'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download='dig-responses.html'; a.click(); URL.revokeObjectURL(url);
+    setStatus('saveMsg','Export downloaded');
+  });
+
+  clearAllBtn.addEventListener('click', ()=>{
+    if(confirm('Clear all saved responses?')){ clearEntries(); setStatus('saveMsg','Cleared'); }
+  });
+
+  // Simple escape for inclusion in exported inline JS
+  function escapeHtmlForInline(s){ return String(s||'').replace(/'/g,"\\'").replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/\r/g,''); }
+  function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // initial render
+  // render shared KB panel and saved list
+  try { loadAndRenderSharedKB(); } catch (e) {}
+  renderSavedList();
+
+  // wire shared KB panel controls
+  try {
+    const rbtn = el('sharedKbRefresh'); if (rbtn) rbtn.onclick = () => { loadAndRenderSharedKB(); setStatus('saveMsg','Shared KB refreshed'); };
+    const selAll = el('sharedKbSelectAll'); if (selAll) selAll.onclick = () => { const list = el('sharedKbList'); if (!list) return; const cbs = list.querySelectorAll('.shared-kb-checkbox'); const ids = []; cbs.forEach(cb => { cb.checked = true; ids.push(cb.dataset.id); }); saveSelectedSharedIds(ids); setStatus('saveMsg','Selected all'); };
+    const clearBtn = el('sharedKbClear'); if (clearBtn) clearBtn.onclick = () => { const list = el('sharedKbList'); if (!list) return; const cbs = list.querySelectorAll('.shared-kb-checkbox'); cbs.forEach(cb => cb.checked = false); saveSelectedSharedIds([]); setStatus('saveMsg','Cleared selection'); };
+  } catch (e) { }
+})();
+</script>
+</body>
+</html>

@@ -10,7 +10,11 @@ function startPickingElement(onSelect) {
         if (!chrome.runtime?.id || !msg || typeof msg !== 'object') return;
         if (msg.type === 'DIG_ELEMENT_SELECTED') {
             chrome.runtime.onMessage.removeListener(handler);
-            onSelect(msg.selector);
+            try { if (typeof onSelect === 'function') onSelect(msg.selector); } catch (e) { }
+        } else if (msg.type === 'DIG_STOP_PICKING') {
+            // Treat a stop message as cancellation and notify caller
+            chrome.runtime.onMessage.removeListener(handler);
+            try { if (typeof onSelect === 'function') onSelect(null); } catch (e) { }
         }
     };
     chrome.runtime.onMessage.addListener(handler);
@@ -33,6 +37,7 @@ function activateLocalPicker() {
     isPickerActive = true; document.body.style.cursor = 'crosshair';
     document.addEventListener('mouseover', handleMove, true);
     document.addEventListener('click', handleClick, true);
+    document.addEventListener('keydown', handleKeyDown, true);
 }
 
 function deactivateLocalPicker() {
@@ -41,6 +46,19 @@ function deactivateLocalPicker() {
     if (hoverEl) hoverEl.style.outline = '';
     document.removeEventListener('mouseover', handleMove, true);
     document.removeEventListener('click', handleClick, true);
+    document.removeEventListener('keydown', handleKeyDown, true);
+}
+
+function handleKeyDown(e) {
+    try {
+        if (!isPickerActive) return;
+        if (e.key === 'Escape') {
+            // request global stop-picking which will notify all listeners
+            try { if (chrome.runtime?.id) chrome.runtime.sendMessage({ type: 'DIG_STOP_PICKING' }); } catch (err) { }
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    } catch (err) { }
 }
 
 function handleMove(e) {

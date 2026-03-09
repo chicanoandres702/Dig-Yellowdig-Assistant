@@ -302,8 +302,28 @@ function isDataUrl(s) { return s && s.startsWith('data:'); }
 
 
 
-function scanPageContent(isRaw = false) {
+async function scanPageContent(isRaw = false) {
     const blocks = [], seen = new Set();
+    // Allow users to specify a custom selector that limits scanning to a specific container
+    const custom = localStorage.getItem('dig_custom_reader_selector');
+    if (custom) {
+        try {
+            const roots = document.querySelectorAll(custom);
+            if (roots && roots.length) {
+                for (const root of roots) {
+                    if (!isVisible(root)) continue;
+                    // Use high-fidelity extraction for the custom root
+                    const text = await extractOrderedContent(root, true);
+                    if (text && text.length > 5) {
+                        blocks.push({ text, element: root });
+                    }
+                }
+                return blocks.slice(0, isRaw ? 50 : 15);
+            }
+        } catch (e) { digLog(`Custom Scan Error: ${e.message}`); }
+    }
+
+    // default scan across the whole document
     document.querySelectorAll('p, li, td, blockquote, figcaption, aside').forEach(el => {
         if (!isVisible(el)) return;
         if (!isRaw && el.closest('nav, header, footer, [role="navigation"], #dig-sidebar, #dig-fab')) return;

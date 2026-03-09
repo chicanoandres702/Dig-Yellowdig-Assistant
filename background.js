@@ -3,6 +3,52 @@
  */
 let logBuffer = [];
 
+// Context Menu Setup
+chrome.runtime.onInstalled.addListener(() => {
+    chrome.contextMenus.create({
+        id: 'reply-with-dig',
+        title: 'Reply to Peer with Dig',
+        contexts: ['all'],
+        documentUrlPatterns: ['https://*.yellowdig.app/*']
+    });
+});
+
+chrome.action.onClicked.addListener((tab) => {
+    if (tab && tab.id) {
+        chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SIDEBAR' }).catch(() => { });
+    }
+});
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === 'reply-with-dig') {
+        chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+                // Find potential Yellowdig card/container
+                const sel = document.getSelection();
+                let postText = sel ? sel.toString().trim() : '';
+                let author = 'Classmate';
+
+                // Try to find author if clicking inside a card
+                try {
+                    const active = document.activeElement || (sel && sel.anchorNode && sel.anchorNode.parentElement);
+                    const card = active ? active.closest('.v-card, .yd-feed-item, [role="article"]') : null;
+                    if (card) {
+                        if (!postText) postText = card.innerText.trim();
+                        const authorEl = card.querySelector('.author-name, .yd-author-name, [class*="author"]');
+                        if (authorEl) author = authorEl.innerText.trim();
+                    }
+                } catch (e) { }
+
+                window.postMessage({
+                    type: 'DIG_CONTEXT_REPLY',
+                    payload: { author, text: postText }
+                }, '*');
+            }
+        });
+    }
+});
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const tabId = sender.tab?.id;
 
@@ -193,6 +239,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 sendResponse({ error: err.message });
             });
         return true; // Keep channel open for async response
+    }
+
+    // Open the response tool in a new tab via the background (safer than calling chrome.runtime.getURL from page)
+    if (request.type === 'OPEN_RESPONSE_TOOL') {
+        try {
+            const mode = request.mode || 'post';
+            const cls = request.cls || '';
+            const pageUrl = request.pageUrl || '';
+            let url = chrome.runtime.getURL('response-tool.html') + '?mode=' + encodeURIComponent(mode);
+            if (cls) url += '&cls=' + encodeURIComponent(cls);
+            if (pageUrl) url += '&pageUrl=' + encodeURIComponent(pageUrl);
+            chrome.tabs.create({ url });
+        } catch (e) {
+            console.warn('OPEN_RESPONSE_TOOL failed', e);
+        }
+        sendResponse && sendResponse({ ok: true });
+        return true;
     }
 
     return true;

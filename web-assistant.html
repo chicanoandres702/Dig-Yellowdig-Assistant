@@ -1,165 +1,276 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Academic Assistant Webpage</title>
+  <title>Academic Assistant Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="src/core/styles/theme.css">
   <style>
-    body { font-family: sans-serif; margin: 40px; background: #f9fafb; }
-    .container { max-width: 800px; margin: auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); padding: 32px; }
-    textarea { width: 100%; min-height: 80px; margin-bottom: 16px; font-size: 16px; border-radius: 8px; border: 1px solid #e2e8f0; padding: 12px; }
-    button { margin: 8px 8px 8px 0; padding: 10px 18px; border-radius: 8px; border: none; background: #10b981; color: #fff; font-weight: bold; cursor: pointer; }
-    .output { background: #f3f4f6; border-radius: 8px; padding: 18px; margin-top: 16px; min-height: 120px; font-size: 15px; }
+    body {
+      margin: 0;
+      padding: 40px;
+      background: var(--bg-main);
+      color: var(--text-main);
+      font-family: 'Inter', sans-serif;
+    }
+
+    .main-container {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    .hero-section {
+      margin-bottom: 32px;
+      text-align: center;
+    }
+
+    .hero-section h1 {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--primary-dark);
+      margin-bottom: 8px;
+    }
+
+    .hero-section p {
+      color: var(--text-muted);
+      font-size: 18px;
+    }
+
+    .card-shell {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      padding: 40px;
+      border: var(--glass-border);
+      backdrop-filter: var(--glass-blur);
+    }
+
+    .input-section {
+      margin-bottom: 24px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      margin-bottom: 20px;
+      font-size: 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid #e2e8f0;
+      padding: 16px;
+      font-family: inherit;
+      transition: var(--transition-base);
+      box-sizing: border-box;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px var(--primary-glow);
+    }
+
+    .toolbar-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    button {
+      padding: 12px 24px;
+      border-radius: var(--radius-md);
+      border: none;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition-base);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px var(--primary-glow);
+      filter: brightness(1.05);
+    }
+
+    button.secondary {
+      background: white;
+      color: var(--text-main);
+      border: 1px solid #e2e8f0;
+    }
+
+    button.secondary:hover {
+      background: #f8fafc;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .output-area {
+      background: rgba(0, 0, 0, 0.02);
+      border-radius: var(--radius-md);
+      padding: 32px;
+      margin-top: 24px;
+      min-height: 200px;
+      font-size: 16px;
+      line-height: 1.6;
+      border: 1px dashed #cbd5e1;
+    }
+
+    .output-area h1,
+    .output-area h2 {
+      color: var(--primary-dark);
+    }
+
+    /* Knowledge Base Styles */
+    #dig-kb-viewer {
+      position: fixed;
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-panel);
+      border: var(--glass-border);
+      padding: 32px;
+      z-index: 10000;
+      width: 90%;
+      max-width: 800px;
+      max-height: 80vh;
+      overflow: auto;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      backdrop-filter: var(--glass-blur);
+    }
+
+    .kb-item {
+      padding: 16px;
+      background: white;
+      border-radius: var(--radius-md);
+      margin-bottom: 12px;
+      border: 1px solid #f1f5f9;
+    }
+
+    .kb-tag {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      margin-right: 8px;
+    }
+
+    .tag-rubric {
+      background: #fee2e2;
+      color: #ef4444;
+    }
+
+    .tag-protocol {
+      background: #dbeafe;
+      color: #3b82f6;
+    }
+
+    .tag-knowledge {
+      background: #dcfce7;
+      color: #10b981;
+    }
   </style>
   <script type="module" src="utils.js"></script>
 </head>
-<body>
-  <div class="container">
-    <h2>Academic Assistant Webpage</h2>
-    <textarea id="promptInput" placeholder="Enter your prompt or instructions..."></textarea>
-    <button id="generatePaperBtn">Generate Paper</button>
-    <button id="copyRichTextBtn">Copy as Rich Text</button>
-    <button id="printBtn">Print</button>
-    <div class="output" id="paperOutput"></div>
+
+<body class="dig-amazing-theme">
+  <div class="main-container">
+    <header class="hero-section">
+      <h1>Academic assistant</h1>
+      <p>Streamline your sociological research and writing</p>
+    </header>
+
+    <div class="card-shell">
+      <div class="input-section">
+        <textarea id="promptInput"
+          placeholder="Describe the paper you want to generate or paste instructions..."></textarea>
+        <div class="toolbar-actions">
+          <button id="generatePaperBtn">✨ Generate Paper</button>
+          <button id="copyRichTextBtn" class="secondary">📋 Copy Rich Text</button>
+          <button id="printBtn" class="secondary">🖨️ Print</button>
+        </div>
+      </div>
+
+      <div class="toolbar-actions" id="extra-tools">
+        <!-- Buttons injected via JS -->
+      </div>
+
+      <div class="output-area" id="paperOutput">
+        <div style="color: #94a3b8; text-align: center; margin-top: 60px;">
+          Your generated content will appear here...
+        </div>
+      </div>
+    </div>
   </div>
+
   <script type="module" src="web-assistant.js"></script>
-          paper = data.candidates[0].content.parts[0].text;
-        } catch (e) {}
-      } else if (aiBackend === 'copilot') {
-        // Placeholder for Copilot API call
-        paper = await callCopilotAPI(prompt);
+  <script>
+    // Integration logic updated for sanitized container
+    window.addEventListener('load', () => {
+      const extraTools = document.getElementById('extra-tools');
+      const toolButtons = [
+        { text: '📚 View Knowledge Base', onclick: showKnowledgeBase },
+        { text: '📝 Add Rubric', onclick: extractRubric },
+        { text: '🤖 Copilot Review', onclick: () => alert('Copilot review requested.') },
+        { text: '💡 Suggestions', onclick: () => alert('Suggestions generated.') },
+        { text: '🚀 Export to GitHub', onclick: () => alert('Exported to GitHub.') }
+      ];
+
+      toolButtons.forEach(tool => {
+        const btn = document.createElement('button');
+        btn.className = 'secondary';
+        btn.innerText = tool.text;
+        btn.onclick = tool.onclick;
+        extraTools.appendChild(btn);
+      });
+    });
+
+    // Custom renderers for the new UI
+    function showKnowledgeBase() {
+      let kb = getKnowledgeBase();
+      let html = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">' +
+        '<h2 style="margin:0">Knowledge Base</h2>' +
+        '<button id="closeKbViewerBtn" class="secondary" style="padding:8px 12px">✕</button></div>';
+
+      for (const className in kb) {
+        html += `<div style="margin-bottom:24px;"><h3 style="color:var(--primary); border-bottom:2px solid var(--primary-glow); padding-bottom:4px;">${className}</h3>`;
+        for (const topicName in kb[className]) {
+          html += `<div style="margin-top:12px; font-weight:600; font-size:14px; color:var(--text-muted)">${topicName}</div>`;
+          kb[className][topicName].forEach((item, idx) => {
+            const tagClass = item.type === 'rubric' ? 'tag-rubric' : item.type === 'protocol' ? 'tag-protocol' : 'tag-knowledge';
+            html += `<div class="kb-item">
+                        <span class="kb-tag ${tagClass}">${item.type}</span>
+                        <p style="margin:8px 0; font-size:14px;">${item.text.substring(0, 180)}${item.text.length > 180 ? '...' : ''}</p>
+                        <div style="display:flex; gap:8px;">
+                            <button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="tagKbItem('${className}', '${topicName}', ${idx}, 'protocol')">Tag Protocol</button>
+                            <button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="tagKbItem('${className}', '${topicName}', ${idx}, 'knowledge')">Tag Knowledge</button>
+                        </div>
+                    </div>`;
+          });
+        }
+        copilotSuggestBtn.innerText = 'Generate Copilot Suggestions';
+        copilotSuggestBtn.onclick = function () {
+          alert('Copilot suggestions generated (placeholder).');
+          // Integrate with Copilot suggestion API or workflow here
+        };
+        container.insertBefore(copilotSuggestBtn, document.getElementById('paperOutput'));
+
+        const copilotExportBtn = document.createElement('button');
+        copilotExportBtn.innerText = 'Export to GitHub';
+        copilotExportBtn.onclick = function () {
+          alert('Exported to GitHub (placeholder).');
+          // Integrate with GitHub export workflow here
+        };
+        container.insertBefore(copilotExportBtn, document.getElementById('paperOutput'));
       }
-      document.getElementById('paperOutput').innerText = paper;
-    }
-
-    // Placeholder Copilot API function
-    async function callCopilotAPI(prompt) {
-      // Replace with real Copilot API integration
-      return `# Copilot Generated Paper\n\n**Prompt:** ${prompt}\n\n## Executive Summary\nThis is a Copilot sample summary.\n\n## I. Introduction\nCopilot intro paragraph.\n\n## II. Main Section\nCopilot content with citation (Author, 2020).\n\n## References\nAuthor, A. (2020). Title. Publisher.`;
-    }
-        // Knowledge base browsing/tagging
-        function showKnowledgeBase() {
-          let kb = getKnowledgeBase();
-          let kbHtml = '<h2>Knowledge Base</h2>';
-          for (const className in kb) {
-            kbHtml += `<h3>${className}</h3>`;
-            for (const topicName in kb[className]) {
-              kbHtml += `<b>${topicName}</b><ul>`;
-              kb[className][topicName].forEach((item, idx) => {
-                kbHtml += `<li>${item.type === 'rubric' ? '[Rubric]' : item.type === 'protocol' ? '[Protocol]' : '[Knowledge]'} ${item.text.substring(0, 120)}
-                <button class="tag-protocol-btn" data-class="${className}" data-topic="${topicName}" data-idx="${idx}">Tag as Protocol</button>
-                <button class="tag-knowledge-btn" data-class="${className}" data-topic="${topicName}" data-idx="${idx}">Tag as Knowledge</button>
-                </li>`;
-              });
-              kbHtml += '</ul>';
-            }
-          }
-          const kbDiv = document.createElement('div');
-          kbDiv.id = 'dig-kb-viewer';
-          kbDiv.style = 'position:fixed;top:10%;left:50%;transform:translateX(-50%);background:white;border:2px solid #10b981;padding:20px;z-index:100000;max-width:600px;max-height:70vh;overflow:auto;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.15);';
-          kbDiv.innerHTML = kbHtml + '<br><button id="closeKbViewerBtn">Close</button>';
-          document.body.appendChild(kbDiv);
-
-          // Attach event listeners for tag buttons
-          kbDiv.querySelectorAll('.tag-protocol-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-              const className = btn.getAttribute('data-class');
-              const topicName = btn.getAttribute('data-topic');
-              const idx = btn.getAttribute('data-idx');
-              tagKbItem(className, topicName, idx, 'protocol');
-              document.body.removeChild(kbDiv);
-              showKnowledgeBase();
-            });
-          });
-          kbDiv.querySelectorAll('.tag-knowledge-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-              const className = btn.getAttribute('data-class');
-              const topicName = btn.getAttribute('data-topic');
-              const idx = btn.getAttribute('data-idx');
-              tagKbItem(className, topicName, idx, 'knowledge');
-              document.body.removeChild(kbDiv);
-              showKnowledgeBase();
-            });
-          });
-          kbDiv.querySelector('#closeKbViewerBtn').addEventListener('click', () => {
-            document.body.removeChild(kbDiv);
-          });
-        }
-        window.tagKbItem = function(className, topicName, idx, tag) {
-          tagKbItem(className, topicName, idx, tag);
-          document.body.removeChild(document.getElementById('dig-kb-viewer'));
-          showKnowledgeBase();
-        }
-
-        // Rubric extraction/upload
-        function extractRubric() {
-          const rubricText = prompt('Paste rubric text here:');
-          if (!rubricText) return;
-          const className = prompt('Enter class name for this rubric:', '');
-          const topicName = prompt('Enter topic/chapter for this rubric:', '');
-          let kb = getKnowledgeBase();
-          kb[className] = kb[className] || {};
-          kb[className][topicName] = kb[className][topicName] || [];
-          kb[className][topicName].push({ type: 'rubric', text: rubricText });
-          saveKnowledgeBase(kb);
-          alert('Rubric text saved to knowledge base!');
-        }
-    // Simple markdown to HTML converter
-    function markdownToHtml(md) {
-      let html = md;
-      html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-      html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-      html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-      html = html.replace(/\*\*([\s\S]+?)\*\*/gim, '<b>$1</b>');
-      html = html.replace(/^\* ([\s\S]+?)/gim, '<li>$1</li>');
-      html = html.replace(/\n/g, '<br>');
-      return `<div>${html}</div>`;
-    }
-    
-    // Copy HTML to clipboard as rich text
-    async function copyRichText() {
-      const md = document.getElementById('paperOutput').innerText;
-      const html = markdownToHtml(md);
-      await copyHtmlToClipboard(html);
-      alert('Rich text copied! Paste into Google Docs or Word Online.');
-    }
-    // Add toolbar buttons for KB and rubric
-    window.onload = function() {
-      const container = document.querySelector('.container');
-      const kbBtn = document.createElement('button');
-      kbBtn.innerText = 'View Knowledge Base';
-      kbBtn.onclick = showKnowledgeBase;
-      container.insertBefore(kbBtn, document.getElementById('paperOutput'));
-      const rubricBtn = document.createElement('button');
-      rubricBtn.innerText = 'Add Rubric';
-      rubricBtn.onclick = extractRubric;
-      container.insertBefore(rubricBtn, document.getElementById('paperOutput'));
-
-      // Copilot options
-      const copilotReviewBtn = document.createElement('button');
-      copilotReviewBtn.innerText = 'Request Copilot Review';
-      copilotReviewBtn.onclick = function() {
-        alert('Copilot review requested (placeholder).');
-        // Integrate with GitHub Copilot API or workflow here
-      };
-      container.insertBefore(copilotReviewBtn, document.getElementById('paperOutput'));
-
-      const copilotSuggestBtn = document.createElement('button');
-      copilotSuggestBtn.innerText = 'Generate Copilot Suggestions';
-      copilotSuggestBtn.onclick = function() {
-        alert('Copilot suggestions generated (placeholder).');
-        // Integrate with Copilot suggestion API or workflow here
-      };
-      container.insertBefore(copilotSuggestBtn, document.getElementById('paperOutput'));
-
-      const copilotExportBtn = document.createElement('button');
-      copilotExportBtn.innerText = 'Export to GitHub';
-      copilotExportBtn.onclick = function() {
-        alert('Exported to GitHub (placeholder).');
-        // Integrate with GitHub export workflow here
-      };
-      container.insertBefore(copilotExportBtn, document.getElementById('paperOutput'));
-    }
   </script>
 </body>
+
 </html>

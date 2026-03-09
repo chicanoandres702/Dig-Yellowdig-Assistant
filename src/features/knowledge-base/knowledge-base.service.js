@@ -1,60 +1,55 @@
 /**
- * Knowledge Base: Multi-class with book support.
+ * Knowledge Base Service: Public API for saving and counting KB items.
+ * Relies on kb-storage-core.service.js for persistence logic.
  */
-// renderKnowledgeTab and renderKBClassItems moved to kb-ui.service.js
-
-// Attempt to persist knowledge-base; if we hit quota, prune oldest book pages until it fits.
-function safeSaveKB(kb) {
-    try {
-        localStorage.setItem('digKnowledgeBase', JSON.stringify(kb));
-        return true;
-    } catch (e) {
-        if (e && e.name === 'QuotaExceededError') {
-            // gather all book-page entries with timestamps
-            const entries = [];
-            Object.keys(kb).forEach(cls => {
-                Object.keys(kb[cls]).forEach(topic => {
-                    const arr = kb[cls][topic];
-                    if (Array.isArray(arr)) {
-                        arr.forEach((it, idx) => {
-                            if (it && it.ts) entries.push({ cls, topic, idx, ts: it.ts });
-                        });
-                    }
-                });
-            });
-            // sort oldest first
-            entries.sort((a, b) => a.ts - b.ts);
-            while (entries.length) {
-                const rem = entries.shift();
-                const arr = kb[rem.cls][rem.topic];
-                if (arr && arr[rem.idx]) {
-                    arr.splice(rem.idx, 1);
-                    // also clean up empty topic/class
-                    if (arr.length === 0) delete kb[rem.cls][rem.topic];
-                    if (kb[rem.cls] && Object.keys(kb[rem.cls]).length === 0) delete kb[rem.cls];
-                }
-                try {
-                    localStorage.setItem('digKnowledgeBase', JSON.stringify(kb));
-                    digLog('Pruned old KB entries to free storage');
-                    return true;
-                } catch (e2) {
-                    // keep pruning until success or empty
-                }
-            }
-        }
-        // if we get here, writing failed even after pruning
-        console.warn('Failed to save knowledge base after pruning', e);
-        return false;
-    }
-}
 
 function saveToKnowledgeBase(text, cls) {
     let kb = {};
     try { kb = JSON.parse(localStorage.getItem('digKnowledgeBase') || '{}'); } catch (e) { kb = {}; }
     if (!kb[cls]) kb[cls] = {};
     if (!kb[cls]['Quick-Saves']) kb[cls]['Quick-Saves'] = [];
-    kb[cls]['Quick-Saves'].push({ text, confirmed: true, type: 'knowledge' });
+
+    const content = (typeof text === 'string') ? text : (text && text.text) || '';
+    const html = (text && text.html) || '';
+    const entry = { text: String(content || '').substring(0, 300), confirmed: true, type: 'knowledge' };
+
+    if ((content && content.length > 2000) || (html && html.length > 2000)) {
+        const ref = _storeRemoteContent({ text: content, html });
+        if (ref) entry.contentRef = ref;
+    }
+    kb[cls]['Quick-Saves'].push(entry);
     safeSaveKB(kb);
+}
+
+function saveToBucket(cls, topic, text, opts = {}) {
+    let kb = {};
+    try { kb = JSON.parse(localStorage.getItem('digKnowledgeBase') || '{}'); } catch (e) { kb = {}; }
+    if (!kb[cls]) kb[cls] = {};
+    if (!kb[cls][topic]) kb[cls][topic] = [];
+
+    const { html = '', type = 'knowledge', chapter = null, force = false } = opts;
+    if (type === 'knowledge' && (!text || text.length < 5) && !force) return false;
+
+    const now = Date.now();
+    const rawText = (typeof text === 'string') ? text : (text && text.text) || '';
+    const rawHtml = opts.html || '';
+    const entryBase = { text: String(rawText || '').substring(0, 300), html: '', type: type === 'book-page' ? 'book-page' : 'knowledge', ts: now, url: opts.url || (window.top?.location?.href || window.location.href) };
+    if (type === 'book-page') entryBase.chapter = chapter;
+
+    if ((rawText && rawText.length > 2000) || (rawHtml && rawHtml.length > 2000)) {
+        const ref = _storeRemoteContent({ text: rawText, html: rawHtml });
+        if (ref) entryBase.contentRef = ref;
+    } else {
+        entryBase.text = rawText;
+        entryBase.html = rawHtml;
+    }
+    kb[cls][topic].push(entryBase);
+
+    const ok = safeSaveKB(kb);
+    if (ok) {
+        try { if (typeof window !== 'undefined' && window && window.dispatchEvent) { const newCount = kb[cls] && kb[cls][topic] ? kb[cls][topic].length : 0; window.dispatchEvent(new CustomEvent('DIG_BOOKPAGE_SAVED', { detail: { cls, bookTitle: topic, count: newCount, ts: Date.now() } })); } } catch (e) { }
+    }
+    return ok;
 }
 
 function saveBookPage(cls, bookTitle, chapter, pageData) {
@@ -64,9 +59,8 @@ function saveBookPage(cls, bookTitle, chapter, pageData) {
     if (!kb[cls][bookTitle]) kb[cls][bookTitle] = [];
 
     let { text, html, force, page: pageLabel } = typeof pageData === 'object' ? pageData : { text: pageData, html: '', force: false };
-    // allow forced saves (eg. page number only) even if text is short/empty
     if ((!text || text.length < 20) && !force) return;
-    // ensure stored content includes explicit page-break markers
+
     if (html && !html.includes('dig-page-break')) {
         html += '<div class="dig-page-break" style="page-break-after:always;"></div>';
     }
@@ -74,39 +68,41 @@ function saveBookPage(cls, bookTitle, chapter, pageData) {
         text += '\n\n---PAGE BREAK---\n\n';
     }
 
-    // De-duplication: check against all existing entries
-    const entries = kb[cls][bookTitle];
     const sig = text.substring(0, 200);
-    if (entries.some(e => e.text.substring(0, 200) === sig)) {
+    if (kb[cls][bookTitle].some(e => e.text.substring(0, 200) === sig)) {
         digLog('Duplicate content detected, skipping save.');
         return;
     }
 
-    // Extract spine/section order from URL for sorting
     const url = window.top?.location?.href || window.location.href;
-    // support both path-style epubcfi/6/N and bare /6/N CFI fragments
     const spineMatch = url.match(/epubcfi\/6\/(\d+)/) || url.match(/\/6\/(\d+)/);
     const sectMatch = url.match(/sect[_-]?(\d+)[_-]?(\d+)/);
-    let order = Date.now(); // fallback: timestamp order
+    let order = Date.now();
     if (spineMatch) order = parseInt(spineMatch[1]);
     else if (sectMatch) order = parseInt(sectMatch[1]) * 100 + parseInt(sectMatch[2]);
 
     let meta = {};
     if (typeof getBookMetadata === 'function') meta = getBookMetadata();
 
-    kb[cls][bookTitle].push({ text, html, type: 'book-page', chapter, ts: Date.now(), order, meta, page: pageLabel != null ? pageLabel : null, url });
-    const ok = safeSaveKB(kb);
-    if (!ok) {
-        alert('Knowledge base storage full – some pages may have been discarded.');
+    const rawText = text || '';
+    const rawHtml = html || '';
+    const now = Date.now();
+    const entry = { text: String(rawText).substring(0, 300), html: '', type: 'book-page', chapter, ts: now, order, meta, page: pageLabel != null ? pageLabel : null, url };
+
+    if ((rawText && rawText.length > 2000) || (rawHtml && rawHtml.length > 2000)) {
+        const ref = _storeRemoteContent({ text: rawText, html: rawHtml });
+        if (ref) entry.contentRef = ref;
+    } else {
+        entry.text = rawText;
+        entry.html = rawHtml;
     }
-    // Emit a DOM event when a book page is successfully saved so callers (eg. auto-scan)
-    // can wait for this event instead of busy-polling localStorage.
-    try {
-        if (ok && typeof window !== 'undefined' && window && window.dispatchEvent) {
-            const newCount = kb[cls] && kb[cls][bookTitle] ? kb[cls][bookTitle].length : 0;
-            window.dispatchEvent(new CustomEvent('DIG_BOOKPAGE_SAVED', { detail: { cls, bookTitle, count: newCount, ts: Date.now() } }));
-        }
-    } catch (e) { /* ignore */ }
+    kb[cls][bookTitle].push(entry);
+    const ok = safeSaveKB(kb);
+    if (!ok) alert('Knowledge base storage full – some pages may have been discarded.');
+
+    if (ok) {
+        try { if (typeof window !== 'undefined' && window && window.dispatchEvent) { const newCount = kb[cls][bookTitle].length; window.dispatchEvent(new CustomEvent('DIG_BOOKPAGE_SAVED', { detail: { cls, bookTitle, count: newCount, ts: Date.now() } })); } } catch (e) { }
+    }
 }
 
 function getBookPageCount(cls, bookTitle) {

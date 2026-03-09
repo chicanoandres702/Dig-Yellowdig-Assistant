@@ -22,5 +22,44 @@ function showFullPreview(title, content) {
         </div>
     `;
     document.body.appendChild(overlay);
-    document.getElementById('dig-preview-close').onclick = () => overlay.remove();
+    // Accessibility & focus management
+    const prevActive = document.activeElement;
+    const modal = overlay.firstElementChild;
+    try {
+        const hdr = modal.querySelector('h3'); if (hdr) hdr.id = 'dig-fullpreview-title';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'dig-fullpreview-title');
+    } catch (e) { }
+    overlay.tabIndex = -1;
+    const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const getFocusable = () => Array.from(modal.querySelectorAll(focusableSelector)).filter(el => !el.disabled && (el.offsetWidth || el.offsetHeight));
+
+    const keyHandler = (ev) => {
+        try {
+            if (ev.key === 'Escape') return overlay._cleanup();
+            if (ev.key === 'Tab') {
+                const nodes = getFocusable(); if (!nodes.length) return;
+                const idx = nodes.indexOf(document.activeElement);
+                if (ev.shiftKey) {
+                    if (idx === 0) { ev.preventDefault(); nodes[nodes.length - 1].focus(); }
+                } else {
+                    if (idx === nodes.length - 1) { ev.preventDefault(); nodes[0].focus(); }
+                }
+            }
+        } catch (e) { }
+    };
+
+    const overlayClickHandler = (e) => { if (e.target === overlay) overlay._cleanup(); };
+
+    overlay._cleanup = () => {
+        try { overlay.removeEventListener('click', overlayClickHandler); overlay.removeEventListener('keydown', keyHandler); } catch (e) { }
+        try { overlay.remove(); } catch (e) { }
+        try { if (prevActive && typeof prevActive.focus === 'function') prevActive.focus(); } catch (e) { }
+    };
+
+    overlay.addEventListener('click', overlayClickHandler);
+    overlay.addEventListener('keydown', keyHandler);
+    setTimeout(() => { const nodes = getFocusable(); if (nodes.length) nodes[0].focus(); else overlay.focus(); }, 10);
+    document.getElementById('dig-preview-close').onclick = () => overlay._cleanup();
 }

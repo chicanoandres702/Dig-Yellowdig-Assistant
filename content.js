@@ -112,6 +112,7 @@ function updateContext() {
 updateContext();
 
 function init() {
+  initContextMenuHandler();
   updateContext();
   if (!classBuckets[window.detectedClass]) classBuckets[window.detectedClass] = {};
   if (!classBuckets[window.detectedClass][window.detectedWeek]) {
@@ -170,8 +171,8 @@ if (isVitalSourcePage()) {
       try {
         if (typeof getVitalSourcePageText === 'function') {
           const data = await getVitalSourcePageText();
-          if (data && ((data.text && data.text.length>0) || data.html || data.page != null)) {
-            const sig = `${data.page||''}|${(data.text||'').substring(0,200)}`;
+          if (data && ((data.text && data.text.length > 0) || data.html || data.page != null)) {
+            const sig = `${data.page || ''}|${(data.text || '').substring(0, 200)}`;
             if (sig === _lastFrameSig) return;
             _lastFrameSig = sig;
             // fire both local event and background message (for auto-scan)
@@ -215,7 +216,7 @@ if (isVitalSourcePage()) {
             // also search inside subtree
             try {
               node.querySelectorAll && node.querySelectorAll('input[id^="text-field-"]').forEach(i => attachInputListener({ document: i.ownerDocument }));
-            } catch(_){}
+            } catch (_) { }
           }
         });
       });
@@ -227,7 +228,7 @@ if (isVitalSourcePage()) {
 // simple debounce helper
 function debounce(func, wait) {
   let timeout;
-  return function(...args) {
+  return function (...args) {
     clearTimeout(timeout);
     timeout = setTimeout(() => func.apply(this, args), wait);
   };
@@ -261,6 +262,12 @@ withChrome(() => {
       } else {
         sendResponse(null);
         return false;
+      }
+    }
+
+    if (msg.type === 'TOGGLE_SIDEBAR') {
+      if (typeof toggleSidebar === 'function') {
+        toggleSidebar();
       }
     }
   });

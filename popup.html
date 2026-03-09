@@ -4,49 +4,78 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dig Assistant</title>
+    <!-- Modern Font Stack -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="src/core/styles/theme.css">
     <link rel="stylesheet" href="popup.css">
 </head>
-<body>
-    <div class="header">
-        <h1>Dig Assistant</h1>
+<body class="dig-amazing-theme">
+    <div class="popup-container">
+        <header class="header">
+            <div class="logo-area">
+                <span class="logo-pill">DIG</span>
+                <h1>Academic Assistant</h1>
+            </div>
+            <button id="saveBtn" class="btn btn-primary" title="Save all settings">
+                <span class="icon">💾</span> Save Settings
+            </button>
+        </header>
+        
+        <main class="content-area">
+            <section class="card glass">
+                <div class="card-header">
+                    <span class="label">CONFIG</span>
+                </div>
+                <div class="input-group">
+                    <label for="apiKey">Gemini API Key</label>
+                    <div class="input-wrapper">
+                        <input type="password" id="apiKey" placeholder="• • • • • • • • • • • • • • • •">
+                        <span class="input-icon">🔑</span>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="apiSelect">AI Provider</label>
+                    <select id="apiSelect" class="styled-select" aria-label="AI Backend">
+                        <option value="gemini">Google Gemini</option>
+                        <option value="copilot">GitHub Copilot</option>
+                    </select>
+                </div>
+            </section>
+
+            <section class="card info-card">
+                <div class="card-header">
+                    <span class="label">ACTIVE STATUS</span>
+                </div>
+                <p class="muted">
+                    <span class="status-indicator active"></span>
+                    Extension is active on Yellowdig. Use the <strong>Context</strong> button in the toolbar to upload materials.
+                </p>
+            </section>
+
+            <section class="card glass" id="diagnostics-card">
+                <div class="card-header">
+                    <span class="label">DIAGNOSTICS & LOGS</span>
+                </div>
+                <div class="input-group mt-4">
+                    <label for="streamUrl">Stream URL <span class="badge">Optional</span></label>
+                    <input type="text" id="streamUrl" placeholder="https://endpoint/logs">
+                </div>
+                <div class="btn-grid">
+                    <button id="toggleStreamBtn" class="btn btn-stream">Start Streaming</button>
+                    <button id="downloadLogsBtn" class="btn btn-blue">Download Logs</button>
+                    <button id="getPageReportBtn" class="btn btn-azure">Page Report</button>
+                    <button id="copyDiagBtn" class="btn btn-gray">Copy Diag</button>
+                    <button id="clearLogsBtn" class="btn btn-red">Clear All</button>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <span class="footer-text">Social Work & Sociology Resource Hub</span>
+            <span class="version-tag">v2.1.0</span>
+        </footer>
     </div>
-    <button id="saveBtn" class="btn btn-primary">Save Settings</button>
     
-    <div class="card">
-        <div class="input-group">
-            <label for="apiKey">GEMINI API KEY</label>
-            <input type="text" id="apiKey" placeholder="Paste your key here...">
-        </div>
-        <div class="input-group">
-            <label for="apiSelect">AI Backend</label>
-            <select id="apiSelect" aria-label="AI Backend">
-                <option value="gemini">Gemini</option>
-                <option value="copilot">Copilot</option>
-            </select>
-        </div>
-    </div>
-
-    <div class="card">
-        <label>RESOURCES</label>
-        <p class="muted">The Dig toolbar is active on Yellowdig. Use the "Context" button to upload your PDFs.</p>
-    </div>
-
-    <div class="card" id="diagnostics-card">
-        <label>DIAGNOSTICS</label>
-        <p class="muted mt-6">Download or stream debug logs for troubleshooting or to send to an external diagnostic endpoint (MCP/webhook).</p>
-        <div class="input-group">
-            <label for="streamUrl">Stream URL (optional)</label>
-            <input type="text" id="streamUrl" placeholder="https://example.local/logs">
-        </div>
-        <button id="toggleStreamBtn" class="btn btn-stream">Start Streaming Logs</button>
-        <button id="downloadLogsBtn" class="btn btn-blue mt-8">Download Logs</button>
-        <button id="getPageReportBtn" class="btn btn-azure mt-8">Get Page Report</button>
-        <button id="copyDiagBtn" class="btn btn-gray mt-8">Copy Diagnostics</button>
-        <button id="clearLogsBtn" class="btn btn-red mt-8">Clear Logs</button>
-    </div>
-
-    <div class="footer">Social Work & Sociology Resource Hub</div>
-    
-        <script src="popup.js"></script>
+    <script src="popup.js"></script>
 </body>
 </html>
