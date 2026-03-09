@@ -19,7 +19,7 @@ async function renderScanTab(container) {
     </div>`;
 
   if (!blocks.length) {
-    container.innerHTML = `<div style="text-align:center;padding:24px 0;">${toggleBtn}<div style="margin-top:16px;">${pickControls}</div><p style="color:var(--text-muted);font-size:13px;margin-top:20px;">No content detected.</p>${currentSel ? `<div style="margin-top:12px;font-size:12px;color:var(--text-muted);">Selector: <code style="background:var(--bg-card);padding:4px 8px;border-radius:var(--radius-sm);border:var(--glass-border);">${escapeHtml(currentSel)}</code></div>` : ''}</div>`;
+    container.innerHTML = `<div class="scan-feed"><div style="text-align:center;padding:18px 0;">${toggleBtn}<div style="margin-top:12px;">${pickControls}</div><p style="color:var(--text-muted);font-size:13px;margin-top:18px;">No content detected.</p>${currentSel ? `<div style="margin-top:12px;font-size:12px;color:var(--text-muted);">Selector: <code style="background:var(--bg-card);padding:4px 8px;border-radius:var(--radius-sm);border:var(--glass-border);">${escapeHtml(currentSel)}</code></div>` : ''}</div></div>`;
     document.getElementById('dig-raw-toggle').onclick = () => { isRawMode = !isRawMode; renderScanTab(container); };
     // wire pick/set-default/reset and use-default checkbox
     try {
@@ -40,17 +40,51 @@ async function renderScanTab(container) {
     } catch (e) { }
     return;
   }
-  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:var(--border-dim);">${toggleBtn}<div style="display:flex;align-items:center;gap:12px;"><p style="font-size:11px;color:var(--em-400);font-family:var(--font-mono);margin:0;">Found ${blocks.length}</p></div></div><div style="margin-bottom:16px;">${pickControls}</div>`;
-  blocks.forEach((block, i) => {
-    html += `<div class="scan-block" style="background:var(--glass-1);border:var(--border-glass);border-radius:12px;padding:14px;margin-bottom:12px;position:relative;overflow:hidden;transition:all 220ms var(--ease-out-quint);backdrop-filter:blur(20px);">
-      <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg, transparent, hsla(158,70%,60%,0.4), transparent);"></div>
-      <p style="font-size:12.5px;line-height:1.65;margin:0 0 12px;color:var(--em-100);opacity:0.85;">${escapeHtml(block.text.substring(0, 160))}...</p>
-      <button class="dig-scan-save save-btn" data-idx="${i}">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
-        Save Block
-      </button></div>`;
-  });
-  container.innerHTML = html;
+  const headerHtml = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:12px 8px;border-bottom:var(--border-dim);">${toggleBtn}<div style="display:flex;align-items:center;gap:12px;"><p style="font-size:11px;color:var(--em-400);font-family:var(--font-mono);margin:0;">Found ${blocks.length}</p></div></div><div style="margin-bottom:12px;">${pickControls}</div>`;
+
+  // Clear container and add header
+  container.innerHTML = '';
+  const headerWrap = document.createElement('div');
+  headerWrap.innerHTML = headerHtml;
+  container.appendChild(headerWrap);
+
+  // Use Feed + ScanBlock components when available for cleaner DOM composition
+  let feedInstance = null;
+  if (window.DigSidebarComponents && window.DigSidebarComponents.components && typeof window.DigSidebarComponents.components.Feed?.create === 'function') {
+    feedInstance = window.DigSidebarComponents.components.Feed.create();
+    container.appendChild(feedInstance.root);
+    blocks.forEach((block, i) => {
+      const idLabel = `BLK::${String(i+1).padStart(3,'0')} // CONFIDENCE: ${((block.confidence||0)*1).toFixed(2)}`;
+      let blockEl = null;
+      if (window.DigSidebarComponents.components.ScanBlock && typeof window.DigSidebarComponents.components.ScanBlock.create === 'function') {
+        blockEl = window.DigSidebarComponents.components.ScanBlock.create({ id: idLabel, text: (block.text || '').substring(0, 220) + '...' });
+      } else {
+        blockEl = document.createElement('div');
+        blockEl.className = 'scan-block';
+        blockEl.innerHTML = `<div class="scan-id">${idLabel}</div><p class="scan-text">${escapeHtml((block.text||'').substring(0,220))}...</p>`;
+      }
+
+      // append save button (keeps existing save wiring intact)
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'dig-scan-save save-btn';
+      saveBtn.dataset.idx = i;
+      saveBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg> Save Block';
+      blockEl.appendChild(saveBtn);
+      feedInstance.addBlock(blockEl);
+    });
+  } else {
+    // fallback to previous DOM-building strategy
+    container.innerHTML = `<div class="scan-feed">${headerHtml}${blocks.map((b, i) => '').join('')}</div>`;
+    const feed = container.querySelector('.scan-feed');
+    if (feed) {
+      blocks.forEach((block, i) => {
+        const node = document.createElement('div');
+        node.className = 'scan-block';
+        node.innerHTML = `<div class="scan-id">BLK::${String(i+1).padStart(3,'0')} // CONFIDENCE: ${((block.confidence||0)*1).toFixed(2)}</div><p class="scan-text">${escapeHtml(block.text.substring(0, 220))}...</p><button class="dig-scan-save save-btn" data-idx="${i}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg> Save Block</button>`;
+        feed.appendChild(node);
+      });
+    }
+  }
   document.getElementById('dig-raw-toggle').onclick = () => { isRawMode = !isRawMode; renderScanTab(container); };
   // wire pick/set-default/reset and use-default checkbox
   try {
