@@ -66,8 +66,9 @@
         "icon.png",
         "pdf.min.mjs",
         "pdf.js.worker.min.mjs",
-        "src/features/sidebar/sidebar-panel.service.js",
-        "src/features/sidebar/metadata-sniffer.js"
+              "src/features/sidebar/sidebar-panel.service.js",
+              "src/features/sidebar/metadata-sniffer.js",
+              "src/page-scripts/pagepilot-sw-logger.js"
       ],
       "matches": [
         "<all_urls>"

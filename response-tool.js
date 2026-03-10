@@ -510,10 +510,12 @@ Do not use alert() or produce HTML/Markdown; return plain text only.`;
       // Export a static, safe HTML bundle (headers + preformatted content) so it can be pasted
       // into third-party editors that disallow inline JS/event handlers.
       htmlParts.push(`<h3>${(en.type==='post')? 'Yellowdig Post' : 'Peer Response'} • ${new Date(en.createdAt).toLocaleString()}</h3>`);
-      htmlParts.push(`<div><strong>${escapeHtml(en.headerText||'')}</strong></div>`);
+      htmlParts.push(`<div><button class="copy-header" data-copy="${escapeHtmlForInline(en.headerText||'')}">Click to Copy Header</button></div>`);
       htmlParts.push(`<pre>${escapeHtml(en.contentText||'')}</pre>`);
       htmlParts.push('<hr/>');
     });
+    // Attach delegated click handler (avoids inline onclick attributes)
+    htmlParts.push(`<script>document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('.copy-header');if(!b)return;try{navigator.clipboard.writeText(b.getAttribute('data-copy')||'');}catch(e){}});</script>`);
     htmlParts.push('</body></html>');
     const blob = new Blob([htmlParts.join('\n')], {type:'text/html'});
     const url = URL.createObjectURL(blob);

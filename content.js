@@ -147,6 +147,17 @@ async function executeAgentStep(step) {
   }
 }
 window.addEventListener('message', (e) => {
+  // Forward any page-level service worker registration attempts/errors to the background for diagnostics
+  try {
+    if (e.data && typeof e.data.type === 'string' && e.data.type.indexOf('PAGE_SW_') === 0) {
+      try {
+        const payload = e.data || {};
+        const log = `[PAGE SW] ${payload.type} url=${payload.url || ''} msg=${payload.message || ''} stack=${(payload.stack||'').toString().slice(0,1000)}`;
+        withChrome(() => { try { chrome.runtime.sendMessage({ type: 'DIG_DEBUG_LOG', log }); } catch (err) { /* ignore */ } });
+      } catch (err) { /* ignore */ }
+      return;
+    }
+  } catch (err) { /* ignore */ }
   if (e.data && e.data.type === 'DIG_METADATA_SNIFFED') {
     const meta = window.sniffedMetadata;
     if (e.data.url.includes('books.json')) meta.books = e.data.data;
@@ -264,6 +275,9 @@ function init() {
   if (detectedClass && detectedClass !== 'Unknown Class') {
     localStorage.setItem('dig_last_class', detectedClass);
   }
+
+  // Install page-level service worker logger to capture registration attempts/errors
+  try { injectServiceWorkerLogger(); } catch (e) { /* ignore */ }
 
 
   // Highlight shortcut preserved
@@ -773,6 +787,28 @@ function injectSniffer() {
       script.src = chrome.runtime.getURL('src/features/sidebar/metadata-sniffer.js');
       (document.head || document.documentElement).appendChild(script);
     } catch (e) { }
+  });
+}
+
+// Inject a small page-context script that wraps navigator.serviceWorker.register to capture
+// attempts and failures. The content script can't directly override page navigator, so we
+// inject a real <script> into the page context that posts messages back to the page script
+// listener above.
+function injectServiceWorkerLogger() {
+  withChrome(() => {
+    try {
+      if (document.getElementById('pagepilot-sw-logger')) return;
+      const s = document.createElement('script');
+      s.id = 'pagepilot-sw-logger';
+      s.defer = true;
+      try {
+        s.src = chrome.runtime.getURL('src/page-scripts/pagepilot-sw-logger.js');
+      } catch (e) {
+        // Fallback to relative path if chrome.runtime is unavailable
+        s.src = 'src/page-scripts/pagepilot-sw-logger.js';
+      }
+      (document.head || document.documentElement).appendChild(s);
+    } catch (e) { /* ignore */ }
   });
 }
 

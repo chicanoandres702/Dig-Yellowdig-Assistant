@@ -1,5 +1,6 @@
 import { initializeApp } from "./firebase-app.js";
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "./firebase-auth.js";
+// Defer loading of the firebase-auth bundle until runtime (dynamic import)
+let getAuth, initializeAuth, browserLocalPersistence, browserSessionPersistence, browserPopupRedirectResolver, signInWithCustomToken, signInAnonymously, onAuthStateChanged;
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } from "./firebase-firestore.js";
 import { getKnowledgeBase, saveKnowledgeBase } from "./utils.js";
 
@@ -9,13 +10,42 @@ const extBridge = {
     send: function(action, payload = {}) {
         return new Promise((resolve) => {
             if (this.isActive) {
-                chrome.runtime.sendMessage({ action, ...payload }, response => resolve(response));
+                try {
+                    chrome.runtime.sendMessage({ action, ...payload }, (response) => {
+                        // Check for runtime.lastError (e.g., no listener or channel closed)
+                        try {
+                            const err = chrome.runtime.lastError;
+                            if (err) {
+                                return resolve({ ok: false, error: err.message });
+                            }
+                        } catch (e) { /* ignore */ }
+                        // Normalize a successful response
+                        resolve(response || { ok: true, extensionId: chrome.runtime && chrome.runtime.id ? chrome.runtime.id : null });
+                    });
+                } catch (e) {
+                    resolve({ ok: false, error: e && e.message ? e.message : String(e) });
+                }
             } else {
-                setTimeout(() => resolve({ status: 'simulated_success', action }), 600);
+                // Simulated offline response for standalone mode
+                setTimeout(() => resolve({ status: 'simulated_success', action, ok: true }), 600);
             }
         });
     }
 };
+
+// Safe fallback logger used before the UI logger is initialized.
+// Many init routines call `log(...)` very early; ensure a short-lived
+// implementation exists to avoid ReferenceError on pages with strict CSP.
+function log(msg, type = '') {
+    try {
+        if (typeof window !== 'undefined' && window.log && window.log !== log) {
+            try { window.log(msg, type); return; } catch (e) { /* ignore */ }
+        }
+    } catch (e) { /* ignore */ }
+    if (typeof console !== 'undefined' && console.log) {
+        try { console.log(`[PAGEPILOT] ${msg}`); } catch (e) { /* ignore */ }
+    }
+}
 
 // Check connectivity to the background/service worker and update UI badge
 async function checkExtensionBridgeStatus() {
@@ -41,6 +71,38 @@ async function checkExtensionBridgeStatus() {
 
 // Run a quick check shortly after UI loads
 setTimeout(() => { try { checkExtensionBridgeStatus(); } catch (e) {} }, 120);
+
+// Diagnostics: report service-worker registration/ready attempts and failures back to background
+function _reportSwEvent(obj) {
+    try {
+        const msg = `[SW] ${obj.event || 'event'} url=${obj.url || ''} msg=${obj.message || ''}`;
+        if (typeof console !== 'undefined' && console.warn) console.warn(msg);
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+            try { chrome.runtime.sendMessage({ type: 'DIG_DEBUG_LOG', log: msg }); } catch (e) { /* ignore */ }
+        }
+    } catch (e) { /* ignore */ }
+}
+
+try {
+    if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
+        const sw = navigator.serviceWorker;
+        const origRegister = sw.register && sw.register.bind(sw);
+        if (origRegister && !origRegister._pagepilot_wrap) {
+            navigator.serviceWorker.register = async function(scriptURL, options) {
+                _reportSwEvent({ event: 'register_attempt', url: String(scriptURL) });
+                try {
+                    const reg = await origRegister(scriptURL, options);
+                    _reportSwEvent({ event: 'register_success', url: String(scriptURL) });
+                    return reg;
+                } catch (err) {
+                    _reportSwEvent({ event: 'register_error', url: String(scriptURL), message: err && err.message ? err.message : String(err) });
+                    throw err;
+                }
+            };
+            navigator.serviceWorker.register._pagepilot_wrap = true;
+        }
+    }
+} catch (e) { /* ignore instrumentation failures */ }
 
 // --- GEMINI & FIREBASE CORE ---
 const apiKey = "";
@@ -89,21 +151,131 @@ let app = null;
 let auth = null;
 let db = null;
 let firebaseEnabled = false;
-if (firebaseConfig && firebaseConfig.apiKey) {
-    try {
-        app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
-        firebaseEnabled = true;
-    } catch (e) {
-        console.error('Firebase initialization failed:', e);
-        app = auth = db = null;
-        firebaseEnabled = false;
+// Defer importing the firebase-auth bundle to avoid triggering service-worker
+// initialization during page load. We dynamically import and initialize
+// auth only when a firebaseConfig is present.
+const firebaseInitPromise = (async function initFirebase() {
+    if (firebaseConfig && firebaseConfig.apiKey) {
+        try {
+            app = initializeApp(firebaseConfig);
+            // Dynamically import the auth bundle and wire up the functions.
+            // NOTE: the firebase auth runtime attempts to initialize service-worker
+            // messaging during module evaluation. To avoid exceptions or registration
+            // attempts in strict/hostile environments, temporarily stub
+            // navigator.serviceWorker.ready so the bundle sees no active SW.
+            let originalServiceWorker;
+            let swStubbed = false;
+            try {
+                if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker) {
+                    originalServiceWorker = navigator.serviceWorker;
+                    const swStub = {
+                        ready: Promise.resolve({ active: null }),
+                        controller: null,
+                        getRegistration: async () => null
+                    };
+                    try {
+                        Object.defineProperty(navigator, 'serviceWorker', { value: swStub, configurable: true });
+                        swStubbed = true;
+                    } catch (e) {
+                        try { navigator.serviceWorker = swStub; swStubbed = true; } catch (__) { /* ignore */ }
+                    }
+                }
+            } catch (e) { /* ignore */ }
+
+            let authModule;
+            try {
+                authModule = await import('./firebase-auth.js');
+            } finally {
+                // restore original navigator.serviceWorker if we stubbed it
+                try {
+                    if (swStubbed) {
+                        if (typeof originalServiceWorker !== 'undefined') {
+                            try { Object.defineProperty(navigator, 'serviceWorker', { value: originalServiceWorker, configurable: true }); }
+                            catch (e) { try { navigator.serviceWorker = originalServiceWorker; } catch (__) { /* ignore */ } }
+                        } else {
+                            try { delete navigator.serviceWorker; } catch (__) { /* ignore */ }
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+            }
+
+            /* eslint-disable prefer-destructuring */
+            getAuth = authModule.getAuth;
+            initializeAuth = authModule.initializeAuth;
+            browserLocalPersistence = authModule.browserLocalPersistence;
+            browserSessionPersistence = authModule.browserSessionPersistence;
+            browserPopupRedirectResolver = authModule.browserPopupRedirectResolver;
+            signInWithCustomToken = authModule.signInWithCustomToken;
+            signInAnonymously = authModule.signInAnonymously;
+            onAuthStateChanged = authModule.onAuthStateChanged;
+            /* eslint-enable prefer-destructuring */
+
+            // Monkey-patch indexedDBLocalPersistence to be defensive in environments
+            // where service workers are unavailable or blocked. This avoids uncaught
+            // errors originating from navigator.serviceWorker.ready or postMessage.
+            try {
+                const idx = authModule.indexedDBLocalPersistence;
+                if (idx && idx.prototype) {
+                    const proto = idx.prototype;
+                    if (typeof proto.initializeSender === 'function') {
+                        const origInitSender = proto.initializeSender;
+                        proto.initializeSender = async function(...args) {
+                            try { return await origInitSender.apply(this, args); }
+                            catch (err) { this.sender = null; this.activeServiceWorker = null; this.serviceWorkerReceiverAvailable = false; if (typeof console !== 'undefined' && console.warn) console.warn('IndexedDB SW init failed (patched):', err); }
+                        };
+                    }
+                    if (typeof proto.initializeServiceWorkerMessaging === 'function') {
+                        const origInit = proto.initializeServiceWorkerMessaging;
+                        proto.initializeServiceWorkerMessaging = async function(...args) {
+                            try { return await origInit.apply(this, args); }
+                            catch (err) { if (typeof console !== 'undefined' && console.warn) console.warn('IndexedDB SW messaging init failed (patched):', err); }
+                        };
+                    }
+                }
+            } catch (patchErr) {
+                console.warn('Failed to apply indexedDBLocalPersistence monkey-patch:', patchErr);
+            }
+
+            // Initialize auth with explicit persistence choices to avoid IndexedDB
+            try {
+                if (typeof initializeAuth === 'function') {
+                    initializeAuth(app, { popupRedirectResolver: browserPopupRedirectResolver, persistence: [browserLocalPersistence, browserSessionPersistence] });
+                }
+                auth = getAuth(app);
+            } catch (initErr) {
+                console.warn('Safe initializeAuth failed, falling back to getAuth:', initErr);
+                auth = getAuth(app);
+            }
+
+            db = getFirestore(app);
+            firebaseEnabled = true;
+        } catch (e) {
+            console.error('Firebase initialization failed:', e);
+            app = auth = db = null;
+            firebaseEnabled = false;
+            try { loadLocalKnowledgeToUI(); } catch (_) {}
+        }
+    } else {
+        console.info('No Firebase configuration found; running in local/offline mode.');
+        try { loadLocalKnowledgeToUI(); } catch (e) { /* ignore */ }
     }
-} else {
-    console.info('No Firebase configuration found; running in local/offline mode.');
-    try { loadLocalKnowledgeToUI(); } catch (e) { /* ignore */ }
-}
+
+    // After initialization attempt, wire up auth state listener if available
+    if (auth) {
+        onAuthStateChanged(auth, async (u) => {
+            currentUser = u;
+            if (currentUser) {
+                log(`[CLOUD] Connected to session storage: ${currentUser.uid.substring(0,6)}...`, "log-sys");
+                initKnowledgeSync();
+                initDraftsSync();
+                initIterationsSync();
+                try { await syncLocalKnowledgeToCloud(); } catch (e) { log('[KB SYNC] Background sync error: ' + (e && e.message ? e.message : String(e)), 'log-err'); }
+            }
+        });
+    } else {
+        log('[CLOUD] Firebase not initialized; running in local/offline mode.', 'log-sys');
+    }
+})();
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'page-pilot';
 
@@ -397,10 +569,10 @@ function initDraftsSync() {
                 <div class="draft-content-preview">${draft.content}</div>
 
                 <div class="card-actions">
-                    <button class="card-action-btn" onclick="showRefineModal('${draft.id}')">REFINE</button>
-                    <button class="card-action-btn protect" onclick="applyModification('${draft.id}', 'protect')">🛡️ PROTECT</button>
-                    <button class="card-action-btn" onclick="applyModification('${draft.id}', 'shorter')">SHORTER</button>
-                    ${draft.tone === 'yellowdig' ? `<button class="card-action-btn yd" onclick="log('[YD] Posting to DOM via Service...', 'log-yd')">POST YD</button>` : `<button class="card-action-btn pdf" onclick="log('[PDF] Exporting via pdf-v2-export...', 'log-sys')">PDF</button>`}
+                    <button class="card-action-btn" data-action="show-refine" data-id="${draft.id}">REFINE</button>
+                    <button class="card-action-btn protect" data-action="apply-mod" data-id="${draft.id}" data-mod="protect">🛡️ PROTECT</button>
+                    <button class="card-action-btn" data-action="apply-mod" data-id="${draft.id}" data-mod="shorter">SHORTER</button>
+                    ${draft.tone === 'yellowdig' ? `<button class="card-action-btn yd" data-action="post-yd" data-id="${draft.id}">POST YD</button>` : `<button class="card-action-btn pdf" data-action="export-pdf" data-id="${draft.id}">PDF</button>`}
                 </div>
 
                 <!-- Refine Overlay Modal -->
@@ -408,8 +580,8 @@ function initDraftsSync() {
                     <span style="font-size:0.65rem; color:var(--text-muted); margin-bottom:8px; font-weight:700;">CUSTOM REFINEMENT</span>
                     <input type="text" id="refine-input-${draft.id}" class="refine-input-field" placeholder="e.g. Make it sound more enthusiastic...">
                     <div style="display:flex; gap:6px;">
-                        <button class="action-btn" style="margin-bottom:0;" onclick="closeRefineModal('${draft.id}')">CANCEL</button>
-                        <button class="action-btn primary" style="margin-bottom:0;" onclick="applyModification('${draft.id}', 'refine')">APPLY</button>
+                        <button class="action-btn" style="margin-bottom:0;" data-action="close-refine" data-id="${draft.id}">CANCEL</button>
+                        <button class="action-btn primary" style="margin-bottom:0;" data-action="apply-mod" data-id="${draft.id}" data-mod="refine">APPLY</button>
                     </div>
                 </div>
             </div>`;
@@ -699,11 +871,13 @@ function populateDetectedPosts(posts) {
     }
     container.style.display = 'block';
     container.innerHTML = posts.map(p => {
-        const authorEsc = (p.author || 'Unknown').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        const textEsc = (p.text || '').replace(/'/g, "\\'").replace(/\n/g, ' ').replace(/"/g, '&quot;');
+        const author = p.author || 'Unknown';
+        const text = (p.text || '').replace(/\n/g, ' ');
         const title = p.selector ? `Selector` : `Post`;
-        const preview = (p.text || '').substring(0, 120) + ((p.text || '').length > 120 ? '...' : '');
-        return `\n            <div class="item-card">\n                <span class="item-title">${title} (${authorEsc})</span>\n                <div class="item-meta" style="margin-bottom:8px;"><span>${preview}</span></div>\n                <div style="display:flex; gap:6px;">\n                    <button class="card-action-btn" onclick="savePostToKB('${authorEsc}','${textEsc}')">+ KB</button>\n                    <button class="card-action-btn yd" onclick="loadPostToDraft('${authorEsc}','${textEsc}')">📝 DRAFT</button>\n                </div>\n            </div>`;
+        const preview = text.substring(0, 120) + (text.length > 120 ? '...' : '');
+        const authorEnc = encodeURIComponent(author);
+        const textEnc = encodeURIComponent(text);
+        return `\n            <div class="item-card">\n                <span class="item-title">${title} (${author})</span>\n                <div class="item-meta" style="margin-bottom:8px;"><span>${preview}</span></div>\n                <div style="display:flex; gap:6px;">\n                    <button class="card-action-btn" data-action="save-post" data-author="${authorEnc}" data-text="${textEnc}">+ KB</button>\n                    <button class="card-action-btn yd" data-action="load-draft" data-author="${authorEnc}" data-text="${textEnc}">📝 DRAFT</button>\n                </div>\n            </div>`;
     }).join('');
 }
 
@@ -925,6 +1099,37 @@ try {
     }
 } catch (e) { /* ignore */ }
 
+// Delegated handler for data-action buttons to avoid inline event attributes (CSP-friendly)
+try {
+    if (!window.__dig_data_action_bound) {
+        document.addEventListener('click', (e) => {
+            const btn = e.target && e.target.closest ? e.target.closest('button[data-action], [data-action]') : null;
+            if (!btn) return;
+            const action = btn.dataset.action;
+            if (!action) return;
+            const param = (k) => { try { return decodeURIComponent(btn.dataset[k] || ''); } catch (e) { return btn.dataset[k] || ''; } };
+            try {
+                if (action === 'save-post') {
+                    savePostToKB(param('author'), param('text'));
+                } else if (action === 'load-draft') {
+                    loadPostToDraft(param('author'), param('text'));
+                } else if (action === 'show-refine') {
+                    showRefineModal(btn.dataset.id);
+                } else if (action === 'close-refine') {
+                    closeRefineModal(btn.dataset.id);
+                } else if (action === 'apply-mod') {
+                    applyModification(btn.dataset.id, btn.dataset.mod);
+                } else if (action === 'post-yd') {
+                    log('[YD] Posting to DOM via Service...', 'log-yd');
+                } else if (action === 'export-pdf') {
+                    log('[PDF] Exporting via pdf-v2-export...', 'log-sys');
+                }
+            } catch (err) { console.error('Delegated action failed', err); }
+        }, true);
+        window.__dig_data_action_bound = true;
+    }
+} catch (e) { /* ignore */ }
+
 // Settings Gear Icon
 document.getElementById('btnSettings').onclick = () => {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -965,7 +1170,13 @@ document.getElementById('btnSaveSettings').onclick = () => {
 
 window.addEventListener('mousemove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
 window.addEventListener('resize', () => { resize(); createBlobs(); });
-resize(); createBlobs(); loop(); startSession();
+resize(); createBlobs(); loop();
+// Wait for firebase initialization to complete before attempting sign-in
+if (typeof firebaseInitPromise !== 'undefined') {
+    firebaseInitPromise.then(() => { try { startSession(); } catch (e) { console.warn('startSession failed after firebase init', e); } });
+} else {
+    startSession();
+}
 // Ensure the Iterations UI never stays in a perpetual 'Syncing...' state when Firestore
 // or auth are not available. Show a local/default set of iterators that will be
 // replaced by the real snapshot listener if/when Firestore connects.

@@ -237,7 +237,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.type === 'GET_DEBUG_LOGS') {
         sendResponse(logBuffer);
-        return true;
+        // Response is sent synchronously; no need to keep the channel open.
+        return false;
     }
 
     // Accept session update events (engine/simulator send these via runtime.sendMessage)
@@ -259,13 +260,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 try { appendSessionHistory(sid, u).catch(() => {}); } catch (e) { /* swallow */ }
             }
         } catch (e) { /* swallow */ }
-        return true;
+        // We don't send an async sendResponse for session updates.
+        return false;
     }
 
     if (request.type === 'CLEAR_DEBUG_LOGS') {
         logBuffer = [];
         sendResponse({ ok: true });
-        return true;
+        // Response sent synchronously
+        return false;
     }
 
     if (request.type === 'NAVIGATE_TO_NEXT_PAGE') {
@@ -434,7 +437,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             console.warn('OPEN_RESPONSE_TOOL failed', e);
         }
         sendResponse && sendResponse({ ok: true });
-        return true;
+        // Response sent synchronously
+        return false;
     }
 
     // Return stored history for a session (active or archived)
@@ -445,7 +449,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             const history = session && session.history ? session.history : [];
             sendResponse({ ok: true, sessionId: sid, history });
         } catch (e) { sendResponse({ ok: false, error: e && e.message ? e.message : String(e) }); }
-        return true;
+        // Response sent synchronously
+        return false;
     }
 
     // Replay stored tool steps for a session into the active tab (or provided tabId)
@@ -578,7 +583,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 } else {
                     try { sendResponse({ ok: false, error: 'session not found' }); } catch (e) { }
                 }
-                return true;
+                // Response already sent synchronously
+                return false;
             }
 
     // Forward structured agent actions to the active tab's content script.
@@ -604,5 +610,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true; // Keep channel open for async sendResponse
     }
 
-    return true;
+    // Return false by default so we don't indicate an async response unless
+    // one of the branches explicitly returned true and will call sendResponse.
+    // An unconditional `return true` keeps the message channel open and can
+    // trigger "A listener indicated an asynchronous response..." if no
+    // sendResponse is ever called.
+    return false;
 });
