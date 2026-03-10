@@ -8,6 +8,17 @@ import './src/vendor/ajv.full.js';
 import { runAgentSession } from './src/features/agent/agent.engine.js';
 import { runSimAgentSession } from './src/features/agent/agent.simulator.js';
 let logBuffer = [];
+// lightweight logger for service worker
+function log(msg, level = '') {
+    try {
+        logBuffer.push({ ts: Date.now(), level, text: String(msg) });
+        if (logBuffer.length > 2000) logBuffer.shift();
+    } catch (e) { }
+}
+
+// default Gemini model used by agent sessions
+const MODEL = 'gemini-flash-latest';
+
 // Track active agent sessions so they can be cancelled
 const activeAgentSessions = {};
 // Archive completed sessions for replay/debug (short lived)
@@ -207,7 +218,40 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    // Wrap sendResponse so we can guarantee a single response and optionally
+    // schedule a safety fallback if an async branch fails to respond.
+    let __pp_sendResponseCalled = false;
+    const __pp_originalSendResponse = sendResponse;
+    try {
+        sendResponse = function(resp) {
+            if (__pp_sendResponseCalled) return;
+            __pp_sendResponseCalled = true;
+            try { __pp_originalSendResponse(resp); } catch (e) { /* swallow */ }
+        };
+    } catch (e) { /* ignore rebind failures */ }
+
+    function __pp_scheduleSendResponseSafety(timeoutMs = 5000) {
+        try {
+            const t = setTimeout(() => {
+                if (!__pp_sendResponseCalled) {
+                    try { sendResponse({ ok: false, error: 'async_response_timeout' }); } catch (e) { /* swallow */ }
+                }
+            }, Number(timeoutMs) || 5000);
+            return () => clearTimeout(t);
+        } catch (e) { return () => {}; }
+    }
     const tabId = sender.tab?.id;
+
+    // Respond to lightweight bridge health checks from page scripts
+    if (request && (request.action === 'PING' || request.type === 'PING')) {
+        try {
+            sendResponse({ ok: true, extensionId: (chrome && chrome.runtime && chrome.runtime.id) ? chrome.runtime.id : null });
+        } catch (e) {
+            try { sendResponse({ ok: false, error: e && e.message ? e.message : String(e) }); } catch (e2) { }
+        }
+        // synchronous response
+        return false;
+    }
 
     if (request.type === 'DIG_DEBUG_LOG') {
         logBuffer.push(request.log);
@@ -241,7 +285,279 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return false;
     }
 
+    // Helper: safe sendMessage to a tab with timeout and lastError handling
+    function safeSendMessageToTab(tabId, message, timeoutMs = 2500) {
+        return new Promise((resolve) => {
+            let completed = false;
+            const timer = setTimeout(() => {
+                if (completed) return;
+                completed = true;
+                resolve({ ok: false, error: 'timeout' });
+            }, Number(timeoutMs) || 2500);
+
+            try {
+                chrome.tabs.sendMessage(tabId, message, (resp) => {
+                    if (completed) return;
+                    completed = true; clearTimeout(timer);
+                    try {
+                        const err = chrome.runtime.lastError;
+                        if (err) return resolve({ ok: false, error: err.message });
+                    } catch (e) { /* ignore */ }
+                    resolve(resp || { ok: true });
+                });
+            } catch (e) {
+                if (!completed) { completed = true; clearTimeout(timer); resolve({ ok: false, error: e && e.message ? e.message : String(e) }); }
+            }
+        });
+    }
+
+    // === GEMINI QUEUE HELPERS ===
+    // in-memory cache and cooldown for background requests
+    let _bgGeminiCache = new Map();
+    let _bgGeminiCooldownUntil = 0;
+
+    // perform a Gemini API request using provided API key and shared cooldown/cache
+    async function performGeminiRequest(query, systemPrompt, apiKey) {
+        const cacheKey = JSON.stringify({ q: String(query || ''), s: String(systemPrompt || ''), k: String(apiKey || '') });
+        const now = Date.now();
+        if (_bgGeminiCooldownUntil && now < _bgGeminiCooldownUntil) {
+            const wait = Math.ceil((_bgGeminiCooldownUntil - now) / 1000);
+            log(`[BG GEMINI] cooldown active (${wait}s); aborting`,'log-warn');
+            throw new Error('Gemini cooldown active');
+        }
+        const cached = _bgGeminiCache.get(cacheKey);
+        if (cached && (now - cached.ts) < (1000 * 60 * 5)) {
+            return cached.text;
+        }
+        const key = apiKey;
+        if (!key) throw new Error('Gemini API key missing');
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(key)}`;
+        const payload = { contents: [{ parts: [{ text: query }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const signal = controller ? controller.signal : undefined;
+        let timer;
+        if (controller) timer = setTimeout(() => { try { controller.abort(); } catch (e) {} }, 30000);
+        try {
+            const resp = await fetch(endpoint, { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' }, signal });
+            if (controller) clearTimeout(timer);
+            if (!resp.ok) {
+                if (resp.status === 429) {
+                    _bgGeminiCooldownUntil = Date.now() + (1000 * 30);
+                    throw new Error('Gemini rate limited');
+                }
+                const bodyText = await resp.text().catch(() => '');
+                throw new Error(`HTTP ${resp.status} ${bodyText}`);
+            }
+            const data = await resp.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            _bgGeminiCache.set(cacheKey, { ts: Date.now(), text });
+            return text;
+        } catch (e) {
+            throw e;
+        }
+    }
+
+    // Forward simple picker and post-scan requests from the sidebar to the active tab's
+    // content script. Use a safe helper to ensure sendResponse is always called within a timeout.
+    if (request && (request.action === 'START_ELEMENT_PICK' || request.type === 'START_ELEMENT_PICK')) {
+        chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+            const tab = tabs && tabs[0];
+            if (!tab || !tab.id) { try { sendResponse({ ok: false, error: 'no active tab' }); } catch (e) {} ; return; }
+            try {
+                const resp = await safeSendMessageToTab(tab.id, { action: 'START_ELEMENT_PICK' }, 6000);
+                // If the content script in the main frame is not available or refused,
+                // try to inject a lightweight picker into same-origin frames (best-effort).
+                try {
+                    if (!(resp && resp.ok)) {
+                        try {
+                            chrome.scripting.executeScript({
+                                target: { tabId: tab.id, allFrames: true },
+                                func: () => {
+                                    try {
+                                        if (window.__dp_frame_picker_active) return;
+                                        window.__dp_frame_picker_active = true;
+                                        const overlay = document.createElement('div');
+                                        overlay.id = '__dp_frame_picker_overlay';
+                                        overlay.style.position = 'fixed'; overlay.style.left = '0'; overlay.style.top = '0'; overlay.style.right = '0'; overlay.style.bottom = '0';
+                                        overlay.style.zIndex = '2147483646'; overlay.style.background = 'transparent'; overlay.style.pointerEvents = 'auto';
+                                        document.documentElement.appendChild(overlay);
+                                        const info = document.createElement('div');
+                                        info.style.position = 'fixed'; info.style.top = '12px'; info.style.right = '12px'; info.style.zIndex = '2147483647';
+                                        info.style.background = 'rgba(0,0,0,0.6)'; info.style.color = '#fff'; info.style.padding = '8px 10px'; info.style.borderRadius = '8px';
+                                        info.style.fontSize = '12px'; info.style.fontWeight = '600'; info.innerText = 'Click inside this frame to pick an element • Esc to cancel';
+                                        document.documentElement.appendChild(info);
+
+                                        const clickHandler = (e) => {
+                                            try {
+                                                e.preventDefault(); e.stopPropagation();
+                                                let el = e.target;
+                                                try { el = el.closest && (el.closest('article, [role="article"], .post, .comment, .reply, .discussion, [data-post]') || el); } catch (__) {}
+                                                const text = el ? (el.innerText || el.textContent || '') : '';
+                                                const html = el ? (el.outerHTML || '') : '';
+                                                const selector = (function(node){ try { if (!node) return null; const path = []; while (node && node.nodeType === 1) { let tag = node.tagName.toLowerCase(); if (node.id) { path.unshift(tag + '#' + node.id); break; } else { let sib = node, idx = 1; while (sib = sib.previousElementSibling) { if (sib.tagName === node.tagName) idx++; } path.unshift(tag + (idx>1?':nth-of-type('+idx+')':'')); node = node.parentElement; } } return path.join('>'); } catch(e){ return null; } })(el);
+                                                try { chrome.runtime.sendMessage({ action: 'PICKER_RESULTS', results: [{ selector, text: text.substring(0,2000), html: html.substring(0,2000), author: null }] }); } catch (e) {}
+                                            } catch (e) { }
+                                            // cleanup
+                                            try { window.__dp_frame_picker_active = false; } catch (e) {}
+                                            try { overlay.remove(); info.remove(); } catch (e) {}
+                                            try { window.removeEventListener('click', clickHandler, true); window.removeEventListener('keydown', keyHandler, true); } catch (e) {}
+                                        };
+                                        const keyHandler = (e) => {
+                                            if (e.key === 'Escape') {
+                                                try { chrome.runtime.sendMessage({ action: 'PICKER_CANCELLED' }); } catch (e) {}
+                                                try { window.__dp_frame_picker_active = false; } catch (e) {}
+                                                try { overlay.remove(); info.remove(); } catch (e) {}
+                                                try { window.removeEventListener('click', clickHandler, true); window.removeEventListener('keydown', keyHandler, true); } catch (e) {}
+                                            }
+                                        };
+                                        window.addEventListener('click', clickHandler, true);
+                                        window.addEventListener('keydown', keyHandler, true);
+                                    } catch (e) { /* swallow injection errors */ }
+                                }
+                            }).catch(() => {});
+                        } catch (e) { /* swallow */ }
+                    }
+                } catch (e) { /* ignore fallback errors */ }
+                try { sendResponse(resp); } catch (e) { }
+            } catch (e) { try { sendResponse({ ok: false, error: e && e.message ? e.message : String(e) }); } catch (er) {} }
+        });
+        __pp_scheduleSendResponseSafety();
+        return true; // keep channel open
+    }
+
+    if (request && (request.action === 'CANCEL_ELEMENT_PICK' || request.type === 'CANCEL_ELEMENT_PICK')) {
+        chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+            const tab = tabs && tabs[0];
+            if (!tab || !tab.id) { try { sendResponse({ ok: false, error: 'no active tab' }); } catch (e) {} ; return; }
+            try {
+                const resp = await safeSendMessageToTab(tab.id, { action: 'CANCEL_ELEMENT_PICK' }, 3000);
+                try { sendResponse(resp); } catch (e) { }
+            } catch (e) { try { sendResponse({ ok: false, error: e && e.message ? e.message : String(e) }); } catch (er) {} }
+        });
+        __pp_scheduleSendResponseSafety();
+        return true;
+    }
+
+    if (request && (request.action === 'GET_PAGE_POSTS' || request.type === 'GET_PAGE_POSTS')) {
+        // Use lastFocusedWindow to better locate the tab the user was interacting with
+        chrome.tabs.query({ active: true, lastFocusedWindow: true }, async (tabs) => {
+            const tab = tabs && tabs[0];
+            if (!tab || !tab.id) { try { sendResponse({ ok: false, error: 'no active tab' }); } catch (e) {} ; return; }
+            try {
+                // First try the page's top-frame content script (fast path)
+                let aggregated = [];
+                try {
+                    const topResp = await safeSendMessageToTab(tab.id, { action: 'GET_PAGE_POSTS' }, 3000);
+                    if (topResp && topResp.ok && Array.isArray(topResp.posts) && topResp.posts.length) aggregated = aggregated.concat(topResp.posts);
+                } catch (e) { /* ignore top-frame error */ }
+
+                // Also attempt a best-effort scan of all reachable frames (same-origin frames) using scripting.executeScript
+                try {
+                    const results = await chrome.scripting.executeScript({
+                        target: { tabId: tab.id, allFrames: true },
+                        func: () => {
+                            try {
+                                const selectors = ['article','[role="article"]','.post','.comment','.reply','.discussion','[data-post]','.yd-post','.thread'];
+                                const found = new Set();
+                                selectors.forEach(s => { try { document.querySelectorAll(s).forEach(n => found.add(n)); } catch(e){} });
+                                try { document.querySelectorAll('div, p, li').forEach(n => { try { if ((n.innerText||'').trim().length > 120) found.add(n); } catch(e){} }); } catch(e) {}
+                                const out = [];
+                                Array.from(found).forEach(el => {
+                                    try {
+                                        if (!el) return;
+                                        // skip hidden elements
+                                        if (el.offsetParent === null) return;
+                                        const text = (el.innerText || el.textContent || '').trim();
+                                        if (!text || text.length < 30) return;
+                                        const getSel = (node) => { try { const parts = []; let cur = node; while (cur && cur.nodeType === 1) { let tag = cur.tagName.toLowerCase(); if (cur.id) { parts.unshift(tag + '#' + cur.id); break; } else { let sib = cur, idx = 1; while (sib = sib.previousElementSibling) { if (sib.tagName === cur.tagName) idx++; } parts.unshift(tag + (idx>1?':nth-of-type('+idx+')':'')); cur = cur.parentElement; } } return parts.join('>'); } catch(e) { return null; } };
+                                        const selector = getSel(el);
+                                        const authorEl = (el.querySelector && (el.querySelector('[class*=author], .author, [rel=author], [data-author]') || el.querySelector('a[rel=author]'))) || null;
+                                        const author = authorEl ? (authorEl.innerText || authorEl.textContent || '').trim() : null;
+                                        out.push({ selector, text: text.substring(0,2000), html: el.outerHTML ? el.outerHTML.substring(0,2000) : '', author });
+                                    } catch(e) { }
+                                });
+                                return out;
+                            } catch (e) { return []; }
+                        }
+                    });
+                    if (Array.isArray(results)) {
+                        results.forEach(r => {
+                            try {
+                                const list = r && r.result ? r.result : [];
+                                if (Array.isArray(list) && list.length) aggregated = aggregated.concat(list);
+                            } catch (e) {}
+                        });
+                    }
+                } catch (e) { /* best-effort; ignore */ }
+
+                // Deduplicate aggregated posts by selector or text snippet
+                try {
+                    const seen = new Set();
+                    const unique = [];
+                    (aggregated || []).forEach(p => {
+                        try {
+                            const key = (p && p.selector) ? `sel:${p.selector}` : `txt:${String((p && p.text) || '').slice(0,200)}`;
+                            if (!seen.has(key)) { seen.add(key); unique.push(p); }
+                        } catch (e) { }
+                    });
+                    try { sendResponse({ ok: true, posts: unique }); } catch (e) { }
+                } catch (e) { try { sendResponse({ ok: false, error: e && e.message ? e.message : String(e) }); } catch (er) {} }
+            } catch (e) { try { sendResponse({ ok: false, error: e && e.message ? e.message : String(e) }); } catch (er) {} }
+        });
+            __pp_scheduleSendResponseSafety();
+            return true;
+    }
+
+    // Lightweight scoring endpoint: accept candidate posts and return confidence scores
+    if (request && (request.action === 'SCORE_POSTS' || request.type === 'SCORE_POSTS')) {
+        try {
+            const posts = Array.isArray(request.posts) ? request.posts : [];
+            const scored = (posts || []).map(p => {
+                const text = (p && (p.text || '')) ? String(p.text) : '';
+                const author = (p && p.author) ? String(p.author) : '';
+                const selector = (p && p.selector) ? String(p.selector) : '';
+                let conf = 0.05;
+                try {
+                    if (text && text.length > 20) {
+                        const len = Math.min(2000, text.length);
+                        conf += Math.min(0.65, (len / 2000) * 0.7);
+                        if ((text.match(/\n/g) || []).length > 2) conf += 0.05;
+                    } else if (text && text.length >= 5) {
+                        conf += 0.12;
+                    }
+                    if (author && author.trim().length > 1) conf += 0.15;
+                    if (selector) conf += 0.1;
+                    if (/^https?:\/\//i.test(text) || text.trim().length < 30) conf = Math.min(conf, 0.45);
+                } catch (e) { conf = Math.max(0.05, Math.min(1, conf)); }
+                conf = Math.max(0, Math.min(1, Number(conf.toFixed(2))));
+                return Object.assign({}, p, { confidence: conf });
+            }).sort((a, b) => (b.confidence - a.confidence));
+
+            sendResponse({ ok: true, posts: scored });
+        } catch (err) {
+            try { sendResponse({ ok: false, error: err && err.message ? err.message : String(err) }); } catch (e) { }
+        }
+        return false;
+    }
+
     // Accept session update events (engine/simulator send these via runtime.sendMessage)
+    // Handle background Gemini API calls from sidebar
+    if (request && request.action === 'CALL_GEMINI') {
+        (async () => {
+            try {
+                const q = request.query || '';
+                const sys = request.systemPrompt || '';
+                const key = request.apiKey || null;
+                const txt = await performGeminiRequest(q, sys, key);
+                try { sendResponse({ ok: true, text: txt }); } catch (e) { }
+            } catch (err) {
+                try { sendResponse({ ok: false, error: err && err.message ? err.message : String(err) }); } catch (e) { }
+            }
+        })();
+        __pp_scheduleSendResponseSafety();
+        return true;
+    }
+
     if (request && request.action === 'AGENT_SESSION_UPDATE') {
         try {
             const u = request.update || {};
@@ -372,7 +688,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     } catch (e) { }
                 },
                 args: [request.customSelector, request.includeImages]
-            }).catch(() => { }); // Catch and swallow executeScript errors (e.g., protected frames)
+            }).catch(async () => {
+                // Fallback: ask the content script in the main frame to provide scan content
+                try {
+                    await safeSendMessageToTab(tab.id, { action: 'GET_SCAN_CONTENT', customSelector: request.customSelector, includeImages: request.includeImages }, 4000);
+                } catch (e) { /* swallow */ }
+            }); // Catch and swallow executeScript errors (e.g., protected frames)
         });
     }
 
@@ -398,12 +719,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.type === 'FETCH_IMAGE_AS_BASE64') {
-        fetch(request.url)
-            .then(r => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                return r.blob();
-            })
-            .then(async (blob) => {
+        // Fetch with AbortController and a hard timeout to ensure sendResponse is always called.
+        const timeoutMs = 8000;
+        let finished = false;
+        const controller = new AbortController();
+        const timer = setTimeout(() => {
+            if (finished) return;
+            finished = true;
+            try { sendResponse({ error: 'timeout' }); } catch (e) {}
+            try { controller.abort(); } catch (e) {}
+        }, timeoutMs);
+
+        (async () => {
+            try {
+                const resp = await fetch(request.url, { signal: controller.signal });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const blob = await resp.blob();
                 const buffer = await blob.arrayBuffer();
                 const bytes = new Uint8Array(buffer);
 
@@ -415,11 +746,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 }
 
                 const b64 = btoa(binary);
-                sendResponse({ dataUrl: `data:${blob.type};base64,${b64}` });
-            })
-            .catch(err => {
-                sendResponse({ error: err.message });
-            });
+                if (!finished) {
+                    finished = true; clearTimeout(timer);
+                    try { sendResponse({ dataUrl: `data:${blob.type};base64,${b64}` }); } catch (e) {}
+                }
+            } catch (err) {
+                if (!finished) {
+                    finished = true; clearTimeout(timer);
+                    try { sendResponse({ error: err && err.message ? err.message : String(err) }); } catch (e) {}
+                }
+            }
+        })();
+        __pp_scheduleSendResponseSafety();
         return true; // Keep channel open for async response
     }
 
@@ -518,6 +856,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 try { sendResponse({ ok: false, error: err && err.message ? err.message : String(err) }); } catch (e) { }
             }
         })();
+        __pp_scheduleSendResponseSafety();
         return true;
     }
 
@@ -568,6 +907,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         } catch (e) { /* swallow */ }
                     }
                 })();
+                __pp_scheduleSendResponseSafety();
                 return true; // keep channel open
         }
 
@@ -607,6 +947,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 try { sendResponse(resp || { ok: true }); } catch (e) { /* swallow */ }
             });
         });
+        __pp_scheduleSendResponseSafety();
         return true; // Keep channel open for async sendResponse
     }
 

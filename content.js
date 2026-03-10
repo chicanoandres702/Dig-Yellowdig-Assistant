@@ -626,6 +626,29 @@ function scanForCandidatePosts(limit = 12) {
 // Messaging for frame content extraction
 withChrome(() => {
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    // Wrap sendResponse to ensure it's only called once and provide
+    // a safety fallback for async handlers that may fail to call it.
+    let __pp_sendResponseCalled = false;
+    const __pp_originalSendResponse = sendResponse;
+    try {
+      sendResponse = function(resp) {
+        if (__pp_sendResponseCalled) return;
+        __pp_sendResponseCalled = true;
+        try { __pp_originalSendResponse(resp); } catch (e) { /* swallow */ }
+      };
+    } catch (e) { /* ignore */ }
+
+    function __pp_scheduleSendResponseSafety(timeoutMs = 5000) {
+      try {
+        const t = setTimeout(() => {
+          if (!__pp_sendResponseCalled) {
+            try { sendResponse({ ok: false, error: 'async_response_timeout' }); } catch (e) { /* swallow */ }
+          }
+        }, Number(timeoutMs) || 5000);
+        return () => clearTimeout(t);
+      } catch (e) { return () => {}; }
+    }
+
     if (!chrome.runtime?.id) return;
     if (msg.type === 'GET_SCAN_CONTENT' && isVitalSourcePageSafe()) {
       try {
@@ -633,6 +656,7 @@ withChrome(() => {
           getVitalSourcePageText().then(data => {
             if (chrome.runtime?.id) sendResponse(typeof data === 'object' ? data : { text: data, html: '' });
           }).catch(() => sendResponse({ text: '', html: '' }));
+          __pp_scheduleSendResponseSafety();
           return true; // Keep channel open for async response
         } else {
           // No page extractor available — respond with empty content
@@ -651,7 +675,8 @@ withChrome(() => {
         startElementPicker();
         sendResponse({ ok: true });
       } catch (e) { sendResponse({ ok: false, error: e && e.message ? e.message : String(e) }); }
-      return true;
+      // response was sent synchronously above; do not indicate an async response
+      return false;
     }
 
     if (msg.action === 'CANCEL_ELEMENT_PICK' || msg.type === 'CANCEL_ELEMENT_PICK') {
@@ -675,6 +700,7 @@ withChrome(() => {
           sendResponse({ status: 'error', message: err.message });
         }
       })();
+      __pp_scheduleSendResponseSafety();
       return true; // keep channel open for async response
     }
 
@@ -684,6 +710,7 @@ withChrome(() => {
         getDiagnosticReport().then(report => {
           if (chrome.runtime?.id) sendResponse(report);
         }).catch(() => sendResponse(null));
+        __pp_scheduleSendResponseSafety();
         return true;
       } else {
         sendResponse(null);
@@ -775,6 +802,7 @@ withChrome(() => {
             sendResponse({ ok: false, error: err && err.message ? err.message : String(err) });
           }
         })();
+        __pp_scheduleSendResponseSafety();
         return true; // async response
       }
   });

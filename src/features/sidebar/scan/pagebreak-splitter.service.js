@@ -11,7 +11,7 @@
  * 2. Start/end HTML markers
  * 3. Fallback: even paragraph-based splitting
  */
-function splitContentByPagebreaks(text, html, url) {
+async function splitContentByPagebreaks(text, html, url) {
     try {
         const m = window.sniffedMetadata;
         if (!m || !m.pagebreaks) return null;
@@ -25,8 +25,9 @@ function splitContentByPagebreaks(text, html, url) {
         const entries = _expandSubpages(matches);
         if (!entries.length) return null;
 
-        return _splitBySelectorOrMarkers(entries, text, html)
-            || _splitByParagraphs(entries, text);
+        const bySelector = await _splitBySelectorOrMarkers(entries, text, html);
+        if (bySelector && Array.isArray(bySelector) && bySelector.length) return bySelector;
+        return _splitByParagraphs(entries, text);
     } catch (e) { return null; }
 }
 
@@ -81,9 +82,14 @@ function _getEntryLabel(e) {
     return e.label || e.page || e.page_label || e.title || e.pageTitle || null;
 }
 
-function _splitBySelectorOrMarkers(entries, text, html) {
+async function _splitBySelectorOrMarkers(entries, text, html) {
     const allSelector = entries.every(e => e && (e.selector || e.cssSelector || e.elementSelector || e.id));
-    if (allSelector) return _splitBySelectors(entries);
+    if (allSelector) {
+        const res = _splitBySelectors(entries);
+        // _splitBySelectors may return a Promise (cross-frame image work); await if so
+        if (res && typeof res.then === 'function') return await res;
+        return res;
+    }
 
     const allMarkers = entries.every(e => e && (e.start_marker || e.end_marker || e.start || e.end));
     if (allMarkers && html) return _splitByMarkers(entries, html);
@@ -92,14 +98,88 @@ function _splitBySelectorOrMarkers(entries, text, html) {
 }
 
 function _splitBySelectors(entries) {
+    // Recursive search across same-origin frames for selectors and include images
     const rootSel = window._dig_last_vst_selector || '#pbk-page';
-    const root = document.querySelector(rootSel) || document;
     const slices = [];
-    for (const e of entries) {
-        let sel = e.selector || e.cssSelector || e.elementSelector || (e.id ? `#${e.id}` : null);
-        let el = null;
-        try { if (sel && root) el = root.querySelector(sel) || document.querySelector(sel); } catch (err) { }
-        slices.push({ text: el ? (el.innerText || '') : '', html: el ? el.innerHTML : '', label: _getEntryLabel(e) });
+
+    // helper: gather accessible docs/windows recursively
+    function collectDocs(win) {
+        const docs = [];
+        try {
+            const doc = win.document;
+            docs.push({ win, doc });
+            const iframes = doc.querySelectorAll ? Array.from(doc.querySelectorAll('iframe')) : [];
+            for (const f of iframes) {
+                try {
+                    const childWin = f.contentWindow;
+                    if (!childWin || childWin === win) continue;
+                    // attempt to access document to ensure same-origin
+                    const childDoc = childWin.document;
+                    if (childDoc) {
+                        docs.push(...collectDocs(childWin));
+                    }
+                } catch (e) { /* cross-origin or inaccessible frame */ }
+            }
+        } catch (e) { /* inaccessible window */ }
+        return docs;
     }
-    return slices.length ? slices : null;
+
+    const docs = collectDocs(window);
+
+    async function resolveElementInfo(el, doc) {
+        try {
+            // clone and inline images where possible
+            const clone = el.cloneNode(true);
+            const origImgs = Array.from(el.querySelectorAll('img, svg, image, canvas'));
+            const cloneImgs = Array.from(clone.querySelectorAll('img, svg, image, canvas'));
+            for (let i = 0; i < Math.min(origImgs.length, cloneImgs.length); i++) {
+                try {
+                    const orig = origImgs[i];
+                    const cloneImg = cloneImgs[i];
+                    let src = orig.src || orig.getAttribute('data-src') || orig.getAttribute('href') || orig.getAttribute('xlink:href');
+                    if (src && !src.startsWith('data:') && !src.startsWith('chrome-extension:')) {
+                        try { src = new URL(src, doc.baseURI).href; } catch (e) {}
+                    }
+                    const dataUrl = await imageToDataUrl(orig, src || '');
+                    if (dataUrl) {
+                        if (cloneImg.tagName === 'CANVAS') {
+                            // replace canvas with img tag
+                            const imgEl = doc.createElement('img'); imgEl.src = dataUrl; cloneImg.replaceWith(imgEl);
+                        } else {
+                            try { cloneImg.setAttribute('src', dataUrl); } catch (e) { }
+                        }
+                    }
+                } catch (e) { /* ignore per-image errors */ }
+            }
+            const html = clone.innerHTML;
+            const text = await extractOrderedContent(el, true).catch(() => (el.innerText || ''));
+            return { text: text || '', html: html || '', label: null };
+        } catch (e) { return { text: el.innerText || '', html: el.innerHTML || '', label: null }; }
+    }
+
+    // For each entry, attempt to find selector across collected docs
+    const promises = entries.map(async (e) => {
+        const sel = e.selector || e.cssSelector || e.elementSelector || (e.id ? `#${e.id}` : null);
+        let found = null;
+        if (!sel) return { text: '', html: '', label: _getEntryLabel(e) };
+        for (const d of docs) {
+            try {
+                const root = d.doc.querySelector(rootSel) || d.doc;
+                let el = null;
+                try { el = root ? root.querySelector(sel) : null; } catch (err) { }
+                if (!el) {
+                    try { el = d.doc.querySelector(sel); } catch (err) { }
+                }
+                if (el) { found = { el, doc: d.doc }; break; }
+            } catch (err) { /* ignore doc-level errors */ }
+        }
+        if (found) {
+            const info = await resolveElementInfo(found.el, found.doc);
+            info.label = _getEntryLabel(e);
+            return info;
+        }
+        return { text: '', html: '', label: _getEntryLabel(e) };
+    });
+
+    return Promise.all(promises).then(results => results.length ? results : null).catch(() => null);
 }

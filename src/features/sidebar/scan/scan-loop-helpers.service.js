@@ -37,9 +37,9 @@ async function _retryCapture(captured, capturePromise, timeoutMs, isScanning, cu
 }
 
 /** Why: Tries pagebreak splitting; falls back to single page save. */
-function _trySplitAndSave(text, html, url, saveObj, tCls, tTopic, chapter, useShared, finalPage) {
+async function _trySplitAndSave(text, html, url, saveObj, tCls, tTopic, chapter, useShared, finalPage) {
     try {
-        const slices = splitContentByPagebreaks(text, html, url);
+        const slices = await splitContentByPagebreaks(text, html, url);
         if (slices && Array.isArray(slices) && slices.length > 0) {
             for (let si = 0; si < slices.length; si++) {
                 const s = slices[si];

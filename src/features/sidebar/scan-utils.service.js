@@ -216,39 +216,68 @@ async function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
         if (window._dig_last_vst_selector) {
             selectors = [window._dig_last_vst_selector].concat(selectors.filter(s => s !== window._dig_last_vst_selector));
         }
+        // Collect docs from same-origin frames so we can search deeply
+        function collectDocs(win) {
+            const docs = [];
+            try {
+                const doc = win.document;
+                docs.push({ win, doc });
+                const iframes = doc.querySelectorAll ? Array.from(doc.querySelectorAll('iframe')) : [];
+                for (const f of iframes) {
+                    try {
+                        const cw = f.contentWindow;
+                        if (!cw || cw === win) continue;
+                        const cd = cw.document;
+                        if (cd) docs.push(...collectDocs(cw));
+                    } catch (e) { /* skip cross-origin frames */ }
+                }
+            } catch (e) { /* inaccessible */ }
+            return docs;
+        }
+
+        const docs = collectDocs(window);
 
         for (const s of selectors) {
-            const el = document.querySelector(s);
-            if (el) {
-                // make sure the found element actually has text (page might still be loading)
-                const ready = await waitForContent(el, isCoverPage ? 1 : 20, 250);
-                if (!ready) continue;
+            let found = null;
+            for (const d of docs) {
+                try {
+                    const el = d.doc.querySelector(s);
+                    if (!el) continue;
+                    // make sure the found element actually has text (page might still be loading)
+                    const ready = await waitForContent(el, isCoverPage ? 1 : 20, 250);
+                    if (!ready) continue;
+                    found = { el, doc: d.doc };
+                    break;
+                } catch (e) { continue; }
             }
+            if (!found) continue;
+            const el = found.el;
+            const doc = found.doc;
             if (el && (el.innerText?.trim().length >= 20 || isCoverPage)) {
-                // remember successful selector for later
-                window._dig_last_vst_selector = s;
+                // remember successful selector for later (store selector relative to top window)
+                try { window._dig_last_vst_selector = s; } catch (e) { }
 
                 // Clone the element to safely mutate the HTML string for export
                 let clone = el.cloneNode(true);
                 if (includeImages) {
-                    const imgs = clone.querySelectorAll('img, svg, image');
-                    const promises = Array.from(imgs).map(async (img) => {
-                        let src = img.src || img.getAttribute('data-src') || img.getAttribute('href') || img.getAttribute('xlink:href');
-                        if (src && !src.startsWith('data:') && !src.startsWith('chrome-extension:')) {
-                            // Convert to absolute
-                            try { src = new URL(src, document.baseURI).href; } catch (e) { }
-
-                            // Force attributes so innerHTML serialization is absolute
-                            img.setAttribute('src', src);
-                            if (img.tagName !== 'IMG') img.setAttribute('href', src);
-
-                            // Attempt to get base64 data URL to embed in PDF
-                            const dataUrl = await imageToDataUrl(img, src);
-                            if (dataUrl) {
-                                img.setAttribute('src', dataUrl);
-                                if (img.tagName !== 'IMG') img.setAttribute('href', dataUrl);
+                    const origImgs = Array.from(el.querySelectorAll('img, svg, image, canvas'));
+                    const cloneImgs = Array.from(clone.querySelectorAll('img, svg, image, canvas'));
+                    const promises = Array.from(origImgs).map(async (orig, idx) => {
+                        const imgClone = cloneImgs[idx];
+                        try {
+                            let src = orig.src || orig.getAttribute('data-src') || orig.getAttribute('href') || orig.getAttribute('xlink:href');
+                            if (src && !src.startsWith('data:') && !src.startsWith('chrome-extension:')) {
+                                try { src = new URL(src, doc.baseURI).href; } catch (e) {}
                             }
-                        }
+                            const dataUrl = await imageToDataUrl(orig, src || '');
+                            if (dataUrl && imgClone) {
+                                if (imgClone.tagName === 'CANVAS') {
+                                    const imgEl = doc.createElement('img'); imgEl.src = dataUrl; imgClone.replaceWith(imgEl);
+                                } else {
+                                    try { imgClone.setAttribute('src', dataUrl); } catch (e) { }
+                                }
+                            }
+                        } catch (e) { /* ignore per-image errors */ }
                     });
                     await Promise.all(promises);
                 }
@@ -276,7 +305,17 @@ async function getVitalSourcePageText(overrideSelector, forceIncludeImages) {
                 // IF it's a cover page and we still have no images, try a surgical strike on original DOM
                 if (isCoverPage && !data.text.includes('![')) {
                     digLog('Cover page detected but no image found yet. Searching specifically for large images/backgrounds/canvas.');
-                    const coverImg = document.querySelector('img[src*="cover"], [class*="cover"] img, [id*="cover"] img, .cover-image, canvas[class*="cover"], svg[class*="cover"]');
+                    let coverImg = null;
+                    try { coverImg = document.querySelector('img[src*="cover"], [class*="cover"] img, [id*="cover"] img, .cover-image, canvas[class*="cover"], svg[class*="cover"]'); } catch (e) { }
+                    if (!coverImg) {
+                        // search collected docs for a large cover image
+                        for (const d of docs) {
+                            try {
+                                const ci = d.doc.querySelector('img[src*="cover"], [class*="cover"] img, [id*="cover"] img, .cover-image, canvas[class*="cover"], svg[class*="cover"]');
+                                if (ci) { coverImg = ci; break; }
+                            } catch (e) { continue; }
+                        }
+                    }
                     if (coverImg) {
                         const tag = coverImg.tagName;
                         const src = tag === 'CANVAS' ? 'canvas-cover' : (coverImg.src || coverImg.getAttribute('data-src') || coverImg.getAttribute('href') || coverImg.getAttribute('xlink:href'));

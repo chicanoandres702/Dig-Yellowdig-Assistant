@@ -38,6 +38,8 @@
             display: block; width: 100vw; height: 100vh;
             position: fixed; top: 0; left: 0; z-index: 1;
         }
+        /* margin for Gemini test status message */
+        #geminiTestStatus { margin-top: 4px; }
 
         /* Promote canvas to its own compositing layer to reduce repaints */
         #meshCanvas { will-change: transform, opacity; transform: translateZ(0); }
@@ -71,13 +73,13 @@
 
         /* Reduce flicker by hinting compositing for overlay and transition-heavy elements */
         .noise-overlay, aside, #landingView, #consoleView, .monitor, .live-feed {
-            will-change: opacity, transform; backface-visibility: hidden; -webkit-transform: translateZ(0);
+            will-change: opacity, transform; backface-visibility: hidden; -webkit-transform: translateZ(0); transform: translateZ(0);
         }
 
         /* --- SIDEBAR --- */
         aside {
             position: relative; width: var(--sidebar-width); height: 100vh;
-            background: var(--sidebar-bg); backdrop-filter: blur(20px);
+            background: var(--sidebar-bg); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
             border-right: 1px solid var(--border); z-index: 100;
             display: flex; flex-direction: column; box-sizing: border-box;
             transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
@@ -132,12 +134,50 @@
         /* Drafts & Scan Enhancements */
         .post-picker-container { max-height: 250px; overflow-y: auto; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 6px; background: rgba(0,0,0,0.2); }
         .kb-checkbox-group { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-        .kb-checkbox-label { font-size: 0.55rem; padding: 6px 10px; border-radius: 12px; background: rgba(255,255,255,0.05); color: var(--text-muted); cursor: pointer; border: 1px solid transparent; transition: 0.2s; user-select: none; font-weight: 700; }
+        .kb-checkbox-label { font-size: 0.55rem; padding: 6px 10px; border-radius: 12px; background: rgba(255,255,255,0.05); color: var(--text-muted); cursor: pointer; border: 1px solid transparent; transition: 0.2s; -webkit-user-select: none; user-select: none; font-weight: 700; }
         .kb-checkbox-label:hover { background: rgba(255,255,255,0.1); }
         .kb-checkbox-label.selected { background: rgba(192, 132, 252, 0.15); color: var(--bucket-purple); border-color: rgba(192, 132, 252, 0.4); }
         
-        .refine-modal { display: none; position: absolute; inset: 0; background: rgba(15,23,42,0.95); backdrop-filter: blur(5px); z-index: 50; flex-direction: column; padding: 16px; border-radius: 10px; justify-content: center; }
+        .refine-modal { display: none; position: absolute; inset: 0; background: rgba(15,23,42,0.95); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); z-index: 50; flex-direction: column; padding: 16px; border-radius: 10px; justify-content: center; }
         .refine-input-field { width: 100%; box-sizing: border-box; background: #020617; border: 1px solid var(--accent); color: white; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 0.7rem; font-family: inherit; }
+
+        /* Pattern conflict modal: ensure fixed overlay inside the sidebar, responsive sizing and wrapped actions */
+        #patternConflictModal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+            background: rgba(6,8,13,0.6);
+            -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px);
+            padding: 12px;
+            box-sizing: border-box;
+        }
+        #patternConflictModal[aria-hidden="false"] { display: flex; }
+
+        .modal-dialog {
+            width: 480px;
+            max-width: 92%;
+            background: rgba(15,23,42,0.98);
+            border-radius: 10px;
+            padding: 14px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+        }
+        .modal-body { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; max-height: calc(100vh - 220px); overflow-y: auto; }
+        .modal-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; flex-wrap: wrap; }
+        .modal-actions .action-btn { padding: 8px 10px; font-size: 0.85rem; min-width: 96px; }
+        .modal-actions .action-btn[disabled] { opacity: 0.6; cursor: default; }
+        #conflictMergedEdit { width: 100%; box-sizing: border-box; }
+
+        /* On very narrow sidebars stack buttons and make them full width for easier taps */
+        @media (max-width: 420px) {
+            .modal-dialog { width: calc(100% - 20px); }
+            .modal-actions .action-btn { flex: 1 1 100%; min-width: 0; }
+        }
 
         .card-actions { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); flex-wrap: wrap; }
         .card-action-btn { flex: 1; min-width: 30%; padding: 6px; font-size: 0.55rem; font-weight: 700; border-radius: 4px; border: 1px solid var(--border); background: rgba(255,255,255,0.02); color: var(--text-muted); cursor: pointer; transition: 0.2s; text-transform: uppercase; }
@@ -154,14 +194,14 @@
         #landingView { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; transition: 0.8s cubic-bezier(0.16, 1, 0.3, 1); z-index: 10; }
         #landingView.hidden { opacity: 0; pointer-events: none; transform: translateY(-20px) scale(1.05); }
 
-        .hero-title { font-size: clamp(3rem, 8vw, 6rem); font-weight: 800; letter-spacing: -0.04em; margin: 0 0 24px 0; color: white; line-height: 1; background: linear-gradient(to bottom, #fff 30%, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .hero-title { font-size: clamp(3rem, 8vw, 6rem); font-weight: 800; letter-spacing: -0.04em; margin: 0 0 24px 0; color: white; line-height: 1; background: linear-gradient(to bottom, #fff 30%, #94a3b8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
         .btn-init { background: #e2e8f0; color: #0f172a; border: none; padding: 14px 32px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: 0.4s; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
         .btn-init:hover { background: white; transform: translateY(-2px); box-shadow: 0 15px 35px rgba(0,0,0,0.4); }
 
         #consoleView { display: grid; grid-template-columns: 1fr 320px; gap: 24px; height: 100%; transition: 0.8s cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; transform: translateY(30px); pointer-events: none; }
         #consoleView.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
 
-        .monitor { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+        .monitor { background: rgba(15, 23, 42, 0.4); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
         .monitor-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); }
         
         .live-feed { flex: 1; padding: 20px; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; overflow-y: auto; color: var(--text-main); line-height: 1.6; }
@@ -175,7 +215,7 @@
         .box-label { font-size: 0.55rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.1em; margin-bottom: 8px; display: block; font-weight: 700; }
         .box-val { font-size: 0.8rem; font-weight: 600; color: white; }
 
-        #thinkingOverlay { position: fixed; inset: 0; z-index: 1000; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(10px); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+        #thinkingOverlay { position: fixed; inset: 0; z-index: 1000; background: rgba(15, 23, 42, 0.7); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
         .spinner { width: 36px; height: 36px; border: 3px solid var(--accent); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
         
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -183,6 +223,18 @@
 
         .progress-container { height: 3px; background: rgba(255,255,255,0.05); border-radius: 10px; margin-top: 10px; overflow: hidden; }
         .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: 0.4s ease; box-shadow: 0 0 10px var(--accent); }
+
+        /* Toast notifications */
+        #toastContainer { position: fixed; top: 18px; right: 18px; z-index: 2000; display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
+        .toast { background: rgba(0,0,0,0.8); color: white; padding: 8px 12px; border-radius:8px; font-weight:600; box-shadow: 0 6px 18px rgba(0,0,0,0.4); opacity:0; transform: translateY(-6px); transition: transform 0.25s ease, opacity 0.25s ease; }
+        .toast.show { opacity:1; transform: translateY(0); }
+        .toast.success { background: linear-gradient(90deg,#10b981,#0ea5a4); }
+        .toast.warn { background: linear-gradient(90deg,#f59e0b,#f97316); }
+        .toast.error { background: linear-gradient(90deg,#ef4444,#dc2626); }
+
+        .pattern-row.highlight { animation: highlightFlash 2s ease; }
+        .kb-highlight { background: rgba(59,130,246,0.06); border-radius:6px; transition: background 0.6s ease; }
+        @keyframes highlightFlash { 0% { background: rgba(99,102,241,0.12); } 100% { background: transparent; } }
 
         .post-picker-container::-webkit-scrollbar { width: 6px; }
         .post-picker-container::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 10px; }
@@ -196,7 +248,28 @@
     <div class="noise-overlay"></div>
     <div id="thinkingOverlay">
         <div class="spinner"></div>
-        <div id="thinkingStatus" style="font-size:0.75rem; font-weight:700; letter-spacing:0.1em; color:var(--accent);">PROCESSING...</div>
+        <div id="thinkingStatus" class="thinking-status">PROCESSING...</div>
+    </div>
+    <div id="toastContainer"></div>
+
+    <!-- Pattern Conflict Resolution Modal -->
+    <div id="patternConflictModal" class="modal" aria-hidden="true">
+        <div class="modal-dialog">
+            <h3 id="conflictTitle">Resolve Pattern Conflict</h3>
+            <div class="modal-body">
+                <div class="conflict-row"><strong>Pattern:</strong> <span id="conflictPatternText"></span></div>
+                <div class="conflict-row"><strong>Local target:</strong> <div id="conflictLocalTarget"></div></div>
+                <div class="conflict-row"><strong>Cloud target:</strong> <div id="conflictCloudTarget"></div></div>
+                <div class="conflict-row"><label for="conflictMergedEdit"><strong>Merged / Edit</strong></label><textarea id="conflictMergedEdit" rows="4"></textarea></div>
+            </div>
+            <div class="modal-actions">
+                <button id="btnAcceptCloud" class="action-btn">Accept Cloud</button>
+                <button id="btnAcceptLocal" class="action-btn">Keep Local</button>
+                <button id="btnMergeSave" class="action-btn primary">Save Merge</button>
+                <button id="btnUndoPatternChange" class="action-btn" title="Undo last pattern change">Undo</button>
+                <button id="btnCloseConflictModal" class="action-btn">Cancel</button>
+            </div>
+        </div>
     </div>
 
     <!-- HIGH-FIDELITY ANIMATED BACKGROUND -->
@@ -222,148 +295,164 @@
             <!-- 1. SCAN TAB -->
             <div class="tab-pane" id="pane-scan">
                 <button class="action-btn primary" id="btnRunWorkflow">INITIALIZE SCAN</button>
-                <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-                    <label style="font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:8px;">
+                <div class="flex items-center gap-8 mt-8">
+                    <label class="label-inline">
                         <input type="checkbox" id="autoScanToggle" checked /> Auto-scan page
                     </label>
                 </div>
-                
+               
                 <span class="section-header">Element Picker (Posts)</span>
-                <div style="display:flex; gap:8px;">
-                    <button class="action-btn" id="btnPickPosts" style="border-color: rgba(96, 165, 250, 0.4); color: var(--accent); background: rgba(96, 165, 250, 0.05);">🎯 IDENTIFY POSTS FROM PAGE</button>
-                    <button class="action-btn" id="btnStopPick" style="border-color: rgba(255,255,255,0.06); color: var(--text-muted); background: rgba(255,255,255,0.02);" title="Choose an element from the page">Choose an element</button>
+                <div class="flex gap-8">
+                    <button class="action-btn btn-accent-outline" id="btnPickPosts">🎯 IDENTIFY POSTS FROM PAGE</button>
+                    <button class="action-btn btn-muted-outline" id="btnStopPick" title="Choose an element from the page">Choose an element</button>
                 </div>
-                <div id="detectedPostsContainer" class="post-picker-container" style="display:none;"></div>
+                <div id="detectedPostsContainer" class="post-picker-container hidden"></div>
 
-                <span class="section-header">Active Iterations</span>
-                <div id="iterationsContainer">
-                    <span style="font-size:0.55rem; color:var(--text-muted);">Syncing iterators...</span>
-                </div>
-
-                <span class="section-header">Core Modules</span>
-                <div class="item-card">
-                    <span class="item-title">vitalsource-detector</span>
-                    <div class="item-meta"><span>Context Sniffing</span><span class="badge badge-completed">READY</span></div>
-                </div>
-                <div class="item-card">
-                    <span class="item-title">pagebreak-splitter</span>
-                    <div class="item-meta"><span>DOM Parsing</span><span class="badge badge-completed">READY</span></div>
-                </div>
+                <!-- Active Iterations and Core Modules moved to FEED tab -->
             </div>
 
             <!-- AGENT TAB -->
-            <div class="tab-pane" id="pane-agent" style="display:none">
+            <div class="tab-pane hidden" id="pane-agent">
                 <span class="section-header">Agent Reasoning</span>
                 <div class="form-group">
                     <textarea id="agentPrompt" class="form-input" placeholder="Command the assistant... (e.g., 'Gather instructions, read textbook, bucket them, and draft a response.')"></textarea>
                 </div>
-                <div class="form-group" style="display:flex; gap:8px; align-items:center;">
-                    <div style="flex:1;">
-                        <label style="font-size:0.55rem; color:var(--text-muted); display:block; font-weight:700; margin-bottom:6px;">Thinking Level</label>
-                        <select id="agentThinkingLevel" class="form-input">
+                <div class="form-group flex gap-8 items-center">
+                    <div class="flex-1">
+                        <label class="small-label">Thinking Level</label>
+                        <select id="agentThinkingLevel" class="form-input" title="Thinking level">
                             <option value="low">Low (fast)</option>
                             <option value="medium" selected>Medium</option>
                             <option value="high">High (deep)</option>
                         </select>
                     </div>
-                    <div style="width:120px;">
-                        <label style="font-size:0.55rem; color:var(--text-muted); display:block; font-weight:700; margin-bottom:6px;">Mobile Precision</label>
-                        <select id="agentMobilePrecision" class="form-input">
+                    <div class="w-120">
+                        <label class="small-label">Mobile Precision</label>
+                        <select id="agentMobilePrecision" class="form-input" title="Mobile precision">
                             <option value="low">Low</option>
                             <option value="medium" selected>Medium</option>
                             <option value="high">High</option>
                         </select>
                     </div>
                 </div>
-                <div class="form-group" style="display:flex; align-items:center; gap:8px;">
-                    <label style="font-size:0.65rem; color:var(--text-muted); display:flex; align-items:center; gap:8px;"><input type="checkbox" id="agentSimulate" style="width:14px;height:14px;"> Simulate (no API)</label>
+                <div class="form-group flex items-center gap-8">
+                    <label class="label-inline"><input type="checkbox" id="agentSimulate" class="chk-small"> Simulate (no API)</label>
                 </div>
-                <div style="display:flex; gap:8px; align-items:center;">
-                    <button class="action-btn primary" id="btnExecuteAgent" style="flex:1;">INITIATE AGENT</button>
-                    <button class="action-btn" id="btnCancelAgent" disabled style="width:110px;">CANCEL</button>
+                <div class="flex gap-8 items-center">
+                    <button class="action-btn primary flex-1" id="btnExecuteAgent">INITIATE AGENT</button>
+                    <button class="action-btn w-110" id="btnCancelAgent" disabled>CANCEL</button>
                 </div>
-                <div style="margin-top:12px;">
+                <div class="mt-12">
                     <span class="section-header">Session Progress</span>
 
                     <!-- Replay Controls -->
-                    <div style="display:flex; gap:8px; align-items:center; margin:8px 0;">
-                        <input id="replaySessionId" class="form-input" placeholder="Session ID (paste here)" style="flex:1; padding:8px;" />
-                        <button class="action-btn" id="btnLoadHistory" style="width:92px; padding:8px;">Load</button>
-                        <button class="action-btn" id="btnReplayHistory" style="width:92px; padding:8px;">Replay</button>
-                        <button class="action-btn" id="btnExportHistory" style="width:92px; padding:8px;">Export</button>
+                    <div class="flex gap-8 items-center my-8">
+                        <input id="replaySessionId" class="form-input flex-1" placeholder="Session ID (paste here)" />
+                        <button class="action-btn w-92" id="btnLoadHistory">Load</button>
+                        <button class="action-btn w-92" id="btnReplayHistory">Replay</button>
+                        <button class="action-btn w-92" id="btnExportHistory">Export</button>
                     </div>
 
-                    <div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
-                        <label style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:var(--text-muted);">
-                            <input type="checkbox" id="replayDryRun" style="width:14px; height:14px;"> Dry Run
+                    <div class="flex gap-12 items-center mb-8">
+                        <label class="label-inline">
+                            <input type="checkbox" id="replayDryRun" class="chk-small"> Dry Run
                         </label>
-                        <label style="font-size:0.65rem; color:var(--text-muted);">Speed (ms)</label>
-                        <input id="replaySpeed" class="form-input" type="number" value="300" style="width:90px; padding:8px;" />
+                        <label class="small-muted">Speed (ms)</label>
+                        <input id="replaySpeed" class="form-input w-90" type="number" value="300" title="Replay speed (ms)" />
                     </div>
 
-                    <div id="agentProgress" class="live-feed" style="height:160px; overflow-y:auto; padding:10px; border:1px solid var(--border); border-radius:8px; background: rgba(0,0,0,0.2);">No session activity yet.</div>
+                    <div id="agentProgress" class="live-feed small-live-feed">No session activity yet.</div>
                 </div>
             </div>
 
             <!-- 2. KB TAB -->
-            <div class="tab-pane" id="pane-kb" style="display:none">
-                <input type="file" id="kbFileInput" accept=".pdf,.txt,.json" style="display:none;">
+            <div class="tab-pane hidden" id="pane-kb">
+                <input type="file" id="kbFileInput" accept=".pdf,.txt,.json" class="hidden" title="Upload knowledge base file (PDF, TXT, JSON)">
                 <button class="action-btn primary" id="btnUploadKB">UPLOAD RESOURCE (PDF, TXT, JSON)</button>
                 <div id="kbHierarchy">
-                    <div style="font-size:0.65rem; color:var(--text-muted); text-align:center; padding:20px;">Intelligence Buckets Empty. Run Scan to populate.</div>
+                    <div class="placeholder-text">Intelligence Buckets Empty. Run Scan to populate.</div>
                 </div>
             </div>
             
             <!-- 3. DRAFTS TAB -->
-            <div class="tab-pane" id="pane-drafts" style="display:none">
+            <div class="tab-pane hidden" id="pane-drafts">
                 <span class="section-header">1. KB Grounding Context</span>
                 <div id="kbContextSelector" class="kb-checkbox-group">
-                    <span style="font-size:0.55rem; color:var(--text-muted);">Syncing buckets...</span>
+                    <span class="small-muted">Syncing buckets...</span>
+                </div>
+                <div class="flex gap-6 items-center mb-12">
+                    <input id="newBucketClass" class="form-input flex-1" placeholder="Class (e.g., ARCH-202)" />
+                    <input id="newBucketWeek" class="form-input w-120" placeholder="Week (e.g., Week 3)" />
+                    <button class="action-btn w-auto" id="btnCreateBucket">+ New</button>
                 </div>
 
                 <span class="section-header">2. Generate Output</span>
                 <div class="form-group">
                     <textarea id="draftPrompt" class="form-input" placeholder="Select a post from SCAN to auto-fill, or enter topic manually..."></textarea>
                 </div>
-                <div class="form-group" style="display:flex; gap:8px;">
-                    <select id="draftTone" class="form-input" style="flex:1;">
+                <div class="form-group flex gap-8">
+                    <select id="draftTone" class="form-input flex-1" title="Draft tone">
                         <option value="academic">Formal Academic (PDF)</option>
                         <option value="yellowdig">Yellowdig Engagement</option>
                     </select>
-                    <button class="action-btn primary" id="btnGenerateDraft" style="margin:0; width:auto; padding:0 16px;">CREATE</button>
+                    <button class="action-btn primary btn-compact" id="btnGenerateDraft">CREATE</button>
                 </div>
                 
                 <span class="section-header">Recent Drafts & Exports</span>
                 <div id="draftList">
-                    <div style="font-size:0.65rem; color:var(--text-muted); text-align:center; padding:20px;">No grounded drafts synced.</div>
+                    <div class="placeholder-text">No grounded drafts synced.</div>
                 </div>
             </div>
 
             <!-- 4. FEED TAB -->
-            <div class="tab-pane" id="pane-feed" style="display:none">
-                <span class="section-header">System Events Log</span>
-                <div id="miniFeed" style="font-family:'JetBrains Mono', monospace; font-size:0.65rem; line-height:1.5; color:var(--text-muted);">
-                    Waiting for events...
+            <div class="tab-pane hidden" id="pane-feed">
+                <div class="card">
+                    <div class="card-header"><span class="section-header">Active Iterations</span></div>
+                    <div class="card-body">
+                        <div id="feedIterationsContainer">
+                            <div class="placeholder-text">No active iterations found.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><span class="section-header">Core Modules</span></div>
+                    <div class="card-body">
+                        <div id="coreModulesContainer">
+                            <div class="placeholder-text">Loading core modules...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><span class="section-header">System Events Log</span></div>
+                    <div class="card-body">
+                        <div id="miniFeed" class="mini-feed">Waiting for events...</div>
+                    </div>
                 </div>
             </div>
 
             <!-- 5. SETTINGS TAB -->
-            <div class="tab-pane" id="pane-settings" style="display:none">
+            <div class="tab-pane hidden" id="pane-settings">
                 <span class="section-header">Configuration</span>
                 <div class="form-group">
-                    <label style="font-size: 0.55rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">Gemini API Key</label>
-                    <input type="password" id="geminiApiKeyInput" class="form-input" placeholder="AIzaSy..." style="margin-bottom: 8px;">
+                    <label class="small-label">Gemini API Key</label>
+                    <input type="password" id="geminiApiKeyInput" class="form-input mb-8" placeholder="AIzaSy...">
                 </div>
                 <div class="form-group">
-                    <label style="font-size: 0.55rem; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">Firebase Config (paste web app config JSON)</label>
-                    <textarea id="firebaseConfigInput" class="form-input" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}' style="min-height:120px;margin-bottom:8px;font-family:inherit;"></textarea>
-                    <button class="action-btn primary" id="btnSaveFirebaseConfig" style="width:100%;">SAVE FIREBASE CONFIG</button>
-                    <div id="firebaseStatus" style="font-size:0.65rem;color:var(--success);display:none;margin-top:8px;font-weight:600;">Saved</div>
+                    <button class="action-btn" id="btnTestGemini">TEST GEMINI CONNECTION</button>
+                    <div id="geminiTestStatus" class="status-message hidden"></div>
+                </div>
+                <div class="form-group">
+                    <label class="small-label">Firebase Config (paste web app config JSON)</label>
+                    <textarea id="firebaseConfigInput" class="form-input textarea-large" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}'></textarea>
+                    <button class="action-btn primary full-width" id="btnSaveFirebaseConfig">SAVE FIREBASE CONFIG</button>
+                    <div id="firebaseStatus" class="status-message hidden">Saved</div>
                 </div>
                 <button class="action-btn primary" id="btnSaveSettings">SAVE CONFIGURATION</button>
-                <div id="settingsStatus" style="font-size: 0.65rem; color: var(--success); text-align: center; display: none; margin-top: 8px; font-weight: 600;">Settings saved successfully!</div>
+                <div id="settingsStatus" class="status-message hidden">Settings saved successfully!</div>
 
-                <span class="section-header" style="margin-top: 24px;">System Status</span>
+                <span class="section-header">System Status</span>
                 <div class="item-card">
                     <span class="item-title">Extension Bridge</span>
                     <div class="item-meta"><span id="extStatus">Checking...</span></div>
@@ -374,8 +463,8 @@
         <div class="user-profile">
             <div class="user-avatar" id="userInitial">SA</div>
             <div class="user-text">
-                <div style="font-size:0.75rem; font-weight:600; color:white;" id="userName">Admin User</div>
-                <div style="font-size:0.55rem; color:var(--text-muted);" id="userId">Lead Architect</div>
+                <div id="userName" class="user-name">Admin User</div>
+                <div id="userId" class="user-id">Lead Architect</div>
             </div>
         </div>
     </aside>
@@ -389,9 +478,7 @@
         <div id="consoleView">
             <div class="monitor">
                 <div class="monitor-header">
-                    <div style="font-weight:700; font-size:0.7rem; letter-spacing:0.08em; display:flex; align-items:center; gap:8px;">
-                        <span style="color:var(--accent); font-size:1rem;">•</span> EXTENSION TELEMETRY
-                    </div>
+                    <div class="monitor-title"><span class="accent-dot">•</span> EXTENSION TELEMETRY</div>
                 </div>
                 <div class="live-feed" id="mainFeed">
                     <div class="log-entry log-sys">[CORE] Initializing Extension Mission Control...</div>
@@ -401,19 +488,20 @@
             <div class="context-panel">
                 <div class="context-box">
                     <span class="box-label">Grounded Context Path</span>
-                    <div class="box-val" id="ctxPath" style="font-family:monospace; font-size:0.65rem; color:var(--accent);">/root</div>
+                    <div class="box-val ctx-path" id="ctxPath">/root</div>
                 </div>
                 <div class="context-box">
                     <span class="box-label">Module Extraction</span>
                     <div class="box-val" id="progressVal">0%</div>
                     <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
                 </div>
-                <button class="action-btn" id="btnExportData" style="margin-top:auto;">⬇️ EXPORT INTEL BUNDLE</button>
+                <button class="action-btn mt-auto" id="btnExportData">⬇️ EXPORT INTEL BUNDLE</button>
             </div>
         </div>
     </main>
 
     <!-- Connect external script here -->
     <script type="module" src="web-assistant.js"></script>
+    <script type="module" src="carousel-patch.js"></script>
 </body>
 </html>
