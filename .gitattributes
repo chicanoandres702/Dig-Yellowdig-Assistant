@@ -1,0 +1,30 @@
+# Minimal .gitattributes for the project
+# Ensure consistent line endings and proper text/binary handling across platforms
+
+# Auto-detect text files and normalize to LF in the repository
+* text=auto eol=lf
+
+# Explicit text files
+*.html text
+*.css text
+*.js text
+*.mjs text
+*.json text
+*.txt text
+*.md text
+
+# Treat common binary formats as binary (no EOL conversion, no diffs)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.wasm binary
+
+# Shell scripts should keep LF and be executable on Unix
+*.sh text eol=lf
+
+# Do not include packaged archives in export (optional for release builds)
+*.crx export-ignore
+*.zip export-ignore

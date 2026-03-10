@@ -1,0 +1,61 @@
+# .gitignore for PagePilot / PagePilot Assistant extension
+
+# Node modules and package manager logs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+out/
+*.map
+*.bundle
+.cache/
+.vite/
+.parcel-cache/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.sublime*
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment & secrets
+.env
+.env.*.local
+.envrc
+firebase-config.json
+
+# Local debug profile (Edge remote debugging used during smoke tests)
+.edge-debug-profile/
+
+# Extension packages / archives
+*.crx
+*.zip
+
+# Logs & temp
+logs/
+*.log
+*.tmp
+*.temp
+*.bak
+
+# Coverage / test output
+coverage/
+*.lcov
+
+# Misc
+__pycache__/
+*.pyc
+
+# Keep lockfiles under source control (uncomment to ignore if desired)
+# package-lock.json
+# yarn.lock
