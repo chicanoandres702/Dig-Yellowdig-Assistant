@@ -338,6 +338,18 @@ function attachTabListeners() {
             btn.onclick = () => switchTab(btn.dataset.tab);
         });
     }
+    // Also wire any page-level nav buttons (web-assistant.html uses .nav-btn)
+    try {
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.onclick = () => {
+                const t = (btn.dataset && btn.dataset.tab) ? btn.dataset.tab : (btn.getAttribute && btn.getAttribute('data-tab')) || '';
+                // Prefer using existing canonical tab names when possible
+                switchTab(t);
+            };
+        });
+    } catch (e) { /* non-blocking */ }
+
+    // Initialize default tab
     switchTab('Scan');
 
     // Attach Yellowdig mode controls (select + Dig button) when present
@@ -382,28 +394,65 @@ function attachTabListeners() {
 }
 
 async function switchTab(tabName) {
-    // If a TabBar component instance exists on the sidebar, prefer using its API to set the active tab
+    if (!tabName) return;
+    const requested = String(tabName || '');
+    // Normalize against known TABS (case-insensitive) when possible
+    const normalized = (function findCanonical(name) {
+        const n = name.toLowerCase();
+        for (const t of TABS) {
+            if (t.toLowerCase() === n) return t; // exact
+            if ((t.toLowerCase() + 's') === n) return t; // plural
+        }
+        // fallback: capitalize first letter
+        return name.charAt(0).toUpperCase() + name.slice(1);
+    })(requested);
+
+    // If a TabBar component instance exists on the sidebar, try using its API
     try {
         const sb = document.getElementById(SIDEBAR_ID);
         if (sb && sb.__dig_tabInst && typeof sb.__dig_tabInst.setActive === 'function') {
-            sb.__dig_tabInst.setActive(tabName);
+            try { sb.__dig_tabInst.setActive(normalized); } catch (e) { /* non-blocking */ }
         }
     } catch (e) { /* non-blocking */ }
 
-    document.querySelectorAll('.dig-tab').forEach(btn => {
-        const isActive = btn.dataset.tab === tabName;
-        if (isActive) btn.classList.add('active');
-        else btn.classList.remove('active');
-    });
-    const content = document.getElementById('dig-tab-content');
-    if (tabName === 'Scan') await renderScanTab(content);
-    else if (tabName === 'Knowledge') renderKnowledgeTab(content);
-    else if (tabName === 'Draft') renderDraftTab(content);
-    else if (tabName === 'Notes') renderNotesTab(content);
-    else if (tabName === 'Settings') {
-        if (typeof renderSettingsTab === 'function') await renderSettingsTab(content);
-    }
-    else if (tabName === 'Debug') renderDebugTab(content);
+    // Update dig-tab active classes (case-insensitive)
+    try {
+        document.querySelectorAll('.dig-tab').forEach(btn => {
+            const dt = String(btn.dataset.tab || '');
+            const isActive = dt.toLowerCase() === normalized.toLowerCase();
+            btn.classList.toggle('active', isActive);
+        });
+    } catch (e) { /* ignore */ }
+
+    // Update any page-level nav buttons and tab panes (web-assistant.html uses .nav-btn / .tab-pane)
+    try {
+        const low = requested.toLowerCase();
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            const bt = (btn.dataset && btn.dataset.tab) ? String(btn.dataset.tab || '') : (btn.getAttribute && btn.getAttribute('data-tab')) || '';
+            btn.classList.toggle('active', bt.toLowerCase() === low);
+        });
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+        const pane = document.getElementById('pane-' + low);
+        if (pane) pane.classList.remove('hidden');
+    } catch (e) { /* ignore */ }
+
+    // Render content into the sidebar content area when applicable
+    try {
+        const content = document.getElementById('dig-tab-content');
+        if (!content) return;
+        if (normalized === 'Scan') await renderScanTab(content);
+        else if (normalized === 'Knowledge') renderKnowledgeTab(content);
+        else if (normalized === 'Draft') renderDraftTab(content);
+        else if (normalized === 'Notes') renderNotesTab(content);
+        else if (normalized === 'Settings') {
+            if (typeof renderSettingsTab === 'function') await renderSettingsTab(content);
+        }
+        else if (normalized === 'Debug') renderDebugTab(content);
+        else {
+            // For other page-level tabs (Agent, Feed, etc.) we simply clear or leave content alone
+            // (avoid overwriting if a custom render is desired)
+        }
+    } catch (e) { /* non-blocking */ }
 }
 
 function createFAB() {

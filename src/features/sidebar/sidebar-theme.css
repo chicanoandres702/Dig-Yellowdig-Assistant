@@ -22,45 +22,30 @@
 }
 
 /* Sidebar container */
-/* Sidebar container
-   - Default closed position is set in CSS (right: -width) so JS can animate
-  /* subtle metallic sheen over dark panel */
-  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.02)), linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0.06));
-*/
 #dig-sidebar.side-panel {
   width: var(--dig-sidebar-width);
   right: calc(0px - var(--dig-sidebar-width)); /* closed by default */
-  color: var(--metallic-silver); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--metallic-silver);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   /* retain a whisper of neon as accent */
   text-shadow: 0 0 6px rgba(0,255,136,0.06);
   height: 100vh;
   display: flex;
   flex-direction: column;
   background: var(--panel);
-.tab { padding:10px 6px; font-family:var(--font-hud); font-size:10px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; background:none; border:none; color:var(--metallic-silver); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; position:relative; }
   border-left: 1px solid rgba(0,0,0,0.45);
-.tab .tab-icon svg { width:18px; height:18px; display:block; color:inherit; }
-.tab .tab-icon svg * { vector-effect: non-scaling-stroke; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
   z-index: 2147483646;
   box-shadow: -16px 24px 64px rgba(0,0,0,0.6);
-.scan-text { font-family: var(--font-body); font-size:13px; color: var(--metallic-silver); line-height:1.6; margin-bottom:10px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-clamp:3; }
   padding: 0;
   position: fixed;
-.panel-label { font-family: var(--font-hud); font-size:9px; font-weight:700; letter-spacing:0.12em; color: var(--metallic-dark); background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); display:inline-block; padding:6px 10px; margin:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.04); box-shadow: 0 4px 12px rgba(0,0,0,0.45); }
-  border-radius: 0 0 0 0;
+  border-radius: 0;
   overflow: hidden;
-.draft-root { display:flex; flex-direction:column; gap:12px; padding:12px; font-family: var(--font-body); color: var(--metallic-silver); }
 }
 
-.draft-textarea::placeholder { color: rgba(207,214,220,0.45); }
-  content: '';
-  position: absolute; left: 0; right: 0; top: 0; height: 2px;
-.draft-saved-item .title { font-weight:700; color:var(--metallic-silver); font-size:14px; }
-  background: linear-gradient(90deg, var(--neon), rgba(0,255,136,0.15), transparent);
-  box-shadow: var(--neon-glow);
-  z-index: 5;
-  pointer-events: none;
-}
+.draft-root { display:flex; flex-direction:column; gap:12px; padding:12px; font-family: var(--font-body); color: var(--metallic-silver); }
+
+/* cleaned stray/deprecated rules removed to fix parsing issues */
 
 /* Panel header */
 .panel-hdr {
