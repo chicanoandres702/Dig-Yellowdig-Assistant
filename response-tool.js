@@ -506,8 +506,11 @@ Do not use alert() or produce HTML/Markdown; return plain text only.`;
       '<style>body{font-family:Arial,Helvetica,sans-serif;margin:18px;background:#fff;color:#0f172a}pre{white-space:pre-wrap;font-size:14px;padding:10px;border:1px solid #e6eef6;background:#f8fafc;border-radius:8px}</style></head><body>',
       '<h2>Dig — Exported Responses</h2>','<div>Use the "Click to Copy" buttons to copy each block into Canvas.</div>'];
     arr.forEach(en=>{
+      // Avoid inline event handlers in generated HTML to respect strict CSPs on target sites.
+      // Export a static, safe HTML bundle (headers + preformatted content) so it can be pasted
+      // into third-party editors that disallow inline JS/event handlers.
       htmlParts.push(`<h3>${(en.type==='post')? 'Yellowdig Post' : 'Peer Response'} • ${new Date(en.createdAt).toLocaleString()}</h3>`);
-      htmlParts.push(`<div><button onclick="(function(t){navigator.clipboard.writeText(t)})('${escapeHtmlForInline(en.headerText||'')}')">Click to Copy Header</button></div>`);
+      htmlParts.push(`<div><strong>${escapeHtml(en.headerText||'')}</strong></div>`);
       htmlParts.push(`<pre>${escapeHtml(en.contentText||'')}</pre>`);
       htmlParts.push('<hr/>');
     });

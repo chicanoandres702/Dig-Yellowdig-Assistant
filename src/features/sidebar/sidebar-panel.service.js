@@ -1,11 +1,23 @@
 /**
  * Sidebar panel shell with tab navigation and FAB toggle.
+ *
+ * This file may be injected multiple times into pages. To avoid parse-time
+ * "Identifier ... has already been declared" errors on pages that load the
+ * script more than once, store shared defaults on window.__dig_sidebar_panel_service_vars
+ * and use `var` locals here. Re-declaring `var` is safe across multiple loads.
  */
-const SIDEBAR_WIDTH = '360px';
-const SIDEBAR_ID = 'dig-sidebar';
-const FAB_ID = 'dig-fab';
-const TABS = ['Scan', 'Knowledge', 'Draft', 'Notes', 'Settings', 'Debug'];
-const TAB_ICONS = ['📡', '📚', '✍️', '📌', '⚙️', '🔧'];
+window.__dig_sidebar_panel_service_vars = window.__dig_sidebar_panel_service_vars || {};
+window.__dig_sidebar_panel_service_vars.SIDEBAR_WIDTH = window.__dig_sidebar_panel_service_vars.SIDEBAR_WIDTH || '360px';
+window.__dig_sidebar_panel_service_vars.SIDEBAR_ID = window.__dig_sidebar_panel_service_vars.SIDEBAR_ID || 'dig-sidebar';
+window.__dig_sidebar_panel_service_vars.FAB_ID = window.__dig_sidebar_panel_service_vars.FAB_ID || 'dig-fab';
+window.__dig_sidebar_panel_service_vars.TABS = window.__dig_sidebar_panel_service_vars.TABS || ['Scan', 'Knowledge', 'Draft', 'Notes', 'Settings', 'Debug'];
+window.__dig_sidebar_panel_service_vars.TAB_ICONS = window.__dig_sidebar_panel_service_vars.TAB_ICONS || ['📡', '📚', '✍️', '📌', '⚙️', '🔧'];
+
+var SIDEBAR_WIDTH = window.__dig_sidebar_panel_service_vars.SIDEBAR_WIDTH;
+var SIDEBAR_ID = window.__dig_sidebar_panel_service_vars.SIDEBAR_ID;
+var FAB_ID = window.__dig_sidebar_panel_service_vars.FAB_ID;
+var TABS = window.__dig_sidebar_panel_service_vars.TABS;
+var TAB_ICONS = window.__dig_sidebar_panel_service_vars.TAB_ICONS;
 
 function ensureSidebarStyles() {
     if (document.getElementById('dig-sidebar-styles')) return;
@@ -45,7 +57,7 @@ body {
     transition: padding-right 0.3s var(--transition-standard) !important;
 }
 
-#\${SIDEBAR_ID} {
+#${SIDEBAR_ID} {
     box-shadow: -10px 0 30px rgba(0,0,0,0.2) !important;
     border-left: var(--border-glass);
     background: var(--bg-panel) !important;
@@ -224,6 +236,30 @@ function createSidebar() {
 
         createFAB();
         attachTabListeners();
+        // Install a delegated click listener for common sidebar actions (print, copy).
+        // Use a window-scoped guard to avoid binding multiple times across re-injections.
+        try {
+            if (!window.__dig_sidebar_panel_clicks_bound) {
+                document.addEventListener('click', (e) => {
+                    const target = e.target && e.target.closest ? e.target.closest('[data-dig-action], .dig-copy-btn') : null;
+                    if (!target) return;
+                    // Print handler
+                    if (target.dataset && target.dataset.digAction === 'print') {
+                        try { window.print(); } catch (err) { /* ignore */ }
+                        e.preventDefault();
+                        return;
+                    }
+                    // Copy handler
+                    if (target.classList && target.classList.contains('dig-copy-btn')) {
+                        const text = target.getAttribute('data-dig-text') || '';
+                        try { navigator.clipboard.writeText(text); } catch (err) { /* ignore */ }
+                        e.preventDefault();
+                        return;
+                    }
+                }, true);
+                window.__dig_sidebar_panel_clicks_bound = true;
+            }
+        } catch (e) { /* non-blocking */ }
     } catch (e) {
         // In case of any unexpected error, fallback to original creation to avoid breaking the page
         console.error('createSidebar: component-based creation failed, falling back', e);

@@ -63,7 +63,10 @@ function generateExportHTML(entries) {
 
     entries.forEach(en => {
         htmlParts.push(`<h3>${(en.type === 'post') ? 'Yellowdig Post' : 'Peer Response'} • ${new Date(en.createdAt).toLocaleString()}</h3>`);
-        htmlParts.push(`<div><button onclick="(function(t){navigator.clipboard.writeText(t)})('${escapeHtmlForInline(en.headerText || '')}')">Click to Copy Header</button></div>`);
+        // Use data attributes instead of inline onclick to avoid CSP violations when this
+        // HTML is rendered inside an injected sidebar on pages with strict CSP. A delegated
+        // click handler (installed by the sidebar) will handle elements with [data-dig-text].
+        htmlParts.push(`<div><button class="dig-copy-btn" data-dig-text="${escapeHtmlForInline(en.headerText || '')}">Click to Copy Header</button></div>`);
         htmlParts.push(`<pre>${escapeHtml(en.contentText || '')}</pre>`);
         htmlParts.push('<hr/>');
     });

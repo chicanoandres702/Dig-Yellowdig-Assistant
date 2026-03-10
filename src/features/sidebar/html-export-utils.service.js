@@ -28,7 +28,7 @@ function generateHtmlExportTemplate(title, pagebreaksJson, bodyContent) {
     </style>
 </head>
 <body>
-    <button onclick="window.print()" class="no-print" style="position:fixed;top:20px;right:20px;padding:10px 20px;background:#10b981;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold;box-shadow:0 2px 4px rgba(0,0,0,0.1);z-index:9999;">Export to PDF</button>
+    <button data-dig-action="print" class="no-print" style="position:fixed;top:20px;right:20px;padding:10px 20px;background:#10b981;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold;box-shadow:0 2px 4px rgba(0,0,0,0.1);z-index:9999;">Export to PDF</button>
     <h1>\${escapeHtml(title)}</h1>
     <div id="content">
         <script id="dig-sniffed-pagebreaks" type="application/json">\${pagebreaksJson}</script>

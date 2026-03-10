@@ -1,7 +1,111 @@
 /**
  * Background script: MV3 relay for cross-domain frames and diagnostic logging.
  */
+// Ensure vendored Ajv bundle executes early in the service-worker so
+// the Ajv loader (src/vendor/ajv.js) can detect a full Ajv constructor
+// on the global object when imported by the agent engine.
+import './src/vendor/ajv.full.js';
+import { runAgentSession } from './src/features/agent/agent.engine.js';
+import { runSimAgentSession } from './src/features/agent/agent.simulator.js';
 let logBuffer = [];
+// Track active agent sessions so they can be cancelled
+const activeAgentSessions = {};
+// Archive completed sessions for replay/debug (short lived)
+const archivedAgentSessions = {};
+
+// --- IndexedDB session persistence helpers ---
+const DB_NAME = 'pagepilot_agent_sessions';
+const DB_VERSION = 1;
+let _dbPromise = null;
+
+function openDb() {
+    if (_dbPromise) return _dbPromise;
+    _dbPromise = new Promise((resolve, reject) => {
+        try {
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('sessions')) {
+                    const store = db.createObjectStore('sessions', { keyPath: 'sessionId' });
+                    store.createIndex('status', 'status', { unique: false });
+                    store.createIndex('updatedAt', 'updatedAt', { unique: false });
+                }
+            };
+            req.onsuccess = (e) => resolve(e.target.result);
+            req.onerror = (e) => reject(e.target.error || new Error('IndexedDB open failed'));
+        } catch (err) { reject(err); }
+    });
+    return _dbPromise;
+}
+
+async function getSessionRecord(sessionId) {
+    try {
+        const db = await openDb();
+        return await new Promise((resolve) => {
+            const tx = db.transaction('sessions', 'readonly');
+            const store = tx.objectStore('sessions');
+            const req = store.get(sessionId);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => resolve(null);
+        });
+    } catch (e) { return null; }
+}
+
+async function putSessionRecord(rec) {
+    try {
+        const db = await openDb();
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction('sessions', 'readwrite');
+            const store = tx.objectStore('sessions');
+            const req = store.put(rec);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error || new Error('put failed'));
+        });
+    } catch (e) { /* swallow */ return null; }
+}
+
+async function appendSessionHistory(sessionId, update) {
+    try {
+        const existing = await getSessionRecord(sessionId);
+        const rec = existing || { sessionId, history: [], cancelled: false, status: 'active', startedAt: Date.now(), updatedAt: Date.now() };
+        rec.history = rec.history || [];
+        rec.history.push(update);
+        if (rec.history.length > 2000) rec.history.shift();
+        if (update && (update.type === 'cancelled' || update.type === 'cancel_ack')) rec.cancelled = true;
+        if (update && (update.type === 'complete' || update.type === 'error')) rec.status = 'archived';
+        rec.updatedAt = Date.now();
+        await putSessionRecord(rec);
+        return rec;
+    } catch (e) { return null; }
+}
+
+async function loadSessionsOnStartup() {
+    try {
+        const db = await openDb();
+        return await new Promise((resolve) => {
+            const tx = db.transaction('sessions', 'readonly');
+            const store = tx.objectStore('sessions');
+            const req = store.openCursor();
+            req.onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    try {
+                        const rec = cursor.value;
+                        if (rec.status === 'active') activeAgentSessions[rec.sessionId] = rec;
+                        else archivedAgentSessions[rec.sessionId] = rec;
+                    } catch (err) { }
+                    cursor.continue();
+                } else {
+                    resolve(true);
+                }
+            };
+            req.onerror = () => resolve(false);
+        });
+    } catch (e) { return false; }
+}
+
+// Attempt to populate memory from persisted sessions
+loadSessionsOnStartup().then(() => { /* loaded */ }).catch(() => { /* ignore */ });
 
 // Context Menu Setup
 chrome.runtime.onInstalled.addListener(() => {
@@ -11,13 +115,66 @@ chrome.runtime.onInstalled.addListener(() => {
         contexts: ['all'],
         documentUrlPatterns: ['https://*.yellowdig.app/*']
     });
+    // Try to register the side panel default path for browsers that support programmatic side panel setup
+    try {
+        if (chrome.sidePanel && typeof chrome.sidePanel.setOptions === 'function') {
+            try { chrome.sidePanel.setOptions({ path: chrome.runtime.getURL('web-assistant.html') }); } catch (e) { /* ignore */ }
+        }
+    } catch (e) { /* ignore */ }
 });
 
 chrome.action.onClicked.addListener((tab) => {
+    // Try to open the browser side panel when available (Chrome Canary / stable supporting sidePanel API)
+    try {
+        // Preferred: set the side panel to our extension page and open it
+        if (chrome.sidePanel && typeof chrome.sidePanel.setOptions === 'function') {
+            try {
+                chrome.sidePanel.setOptions({ path: chrome.runtime.getURL('web-assistant.html') }, () => {
+                    try { if (typeof chrome.sidePanel.open === 'function') chrome.sidePanel.open(); } catch (e) {}
+                });
+                return;
+            } catch (e) { /* fallthrough to other methods */ }
+        }
+
+        // Some implementations expose a simple open() - attempt it
+        if (chrome.sidePanel && typeof chrome.sidePanel.open === 'function') {
+            try { chrome.sidePanel.open(); return; } catch (e) { /* fallthrough */ }
+        }
+    } catch (e) { /* ignore feature-detection errors and fallback */ }
+
+    // Fallback: send a toggle message to the content script so the in-page sidebar can open
     if (tab && tab.id) {
         chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SIDEBAR' }).catch(() => { });
     }
 });
+
+// Keyboard command handler: toggle side panel (manifest command: toggle-side-panel)
+try {
+    chrome.commands && chrome.commands.onCommand && chrome.commands.onCommand.addListener((command) => {
+        if (command !== 'toggle-side-panel') return;
+        try {
+            if (chrome.sidePanel && typeof chrome.sidePanel.setOptions === 'function') {
+                try {
+                    chrome.sidePanel.setOptions({ path: chrome.runtime.getURL('web-assistant.html') }, () => {
+                        try { if (typeof chrome.sidePanel.open === 'function') chrome.sidePanel.open(); } catch (e) {}
+                    });
+                    return;
+                } catch (e) { /* fallthrough */ }
+            }
+            if (chrome.sidePanel && typeof chrome.sidePanel.open === 'function') {
+                try { chrome.sidePanel.open(); return; } catch (e) { /* fallthrough */ }
+            }
+        } catch (e) { /* ignore */ }
+
+        // Fallback: send toggle to active tab so content script opens the in-page sidebar
+        try {
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                const tab = tabs && tabs[0];
+                if (tab && tab.id) chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SIDEBAR' }).catch(() => {});
+            });
+        } catch (e) { }
+    });
+} catch (e) { /* ignore if commands API not available */ }
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === 'reply-with-dig') {
@@ -80,6 +237,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.type === 'GET_DEBUG_LOGS') {
         sendResponse(logBuffer);
+        return true;
+    }
+
+    // Accept session update events (engine/simulator send these via runtime.sendMessage)
+    if (request && request.action === 'AGENT_SESSION_UPDATE') {
+        try {
+            const u = request.update || {};
+            const sid = u.sessionId;
+            if (sid) {
+                // ensure slot in memory
+                if (!activeAgentSessions[sid] && !archivedAgentSessions[sid]) {
+                    archivedAgentSessions[sid] = archivedAgentSessions[sid] || { sessionId: sid, history: [], startedAt: Date.now() };
+                }
+                const target = activeAgentSessions[sid] || archivedAgentSessions[sid];
+                target.history = target.history || [];
+                target.history.push(u);
+                if (target.history.length > 2000) target.history.shift();
+
+                // persist update to IndexedDB (best-effort)
+                try { appendSessionHistory(sid, u).catch(() => {}); } catch (e) { /* swallow */ }
+            }
+        } catch (e) { /* swallow */ }
         return true;
     }
 
@@ -257,6 +436,150 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse && sendResponse({ ok: true });
         return true;
     }
+
+    // Return stored history for a session (active or archived)
+    if (request && request.action === 'GET_AGENT_HISTORY') {
+        try {
+            const sid = request.sessionId;
+            const session = (sid && (activeAgentSessions[sid] || archivedAgentSessions[sid]));
+            const history = session && session.history ? session.history : [];
+            sendResponse({ ok: true, sessionId: sid, history });
+        } catch (e) { sendResponse({ ok: false, error: e && e.message ? e.message : String(e) }); }
+        return true;
+    }
+
+    // Replay stored tool steps for a session into the active tab (or provided tabId)
+    if (request && request.action === 'REPLAY_AGENT_HISTORY') {
+        (async () => {
+            try {
+                const sid = request.sessionId;
+                const dryRun = !!request.dryRun;
+                const speedMs = Number(request.speedMs || 300);
+                const tabIdOverride = request.tabId;
+
+                const session = sid && (activeAgentSessions[sid] || archivedAgentSessions[sid]);
+                if (!session || !Array.isArray(session.history)) {
+                    try { sendResponse({ ok: false, error: 'session not found' }); } catch (e) { }
+                    return;
+                }
+
+                // Extract steps: prefer explicit tool_call entries; also unwrap BATCH operations
+                const steps = [];
+                for (const u of session.history) {
+                    try {
+                        if (!u || !u.type) continue;
+                        if (u.type === 'tool_call' && u.step) steps.push(u.step);
+                        else if (u.type === 'batch_start' && Array.isArray(u.operations)) {
+                            for (const op of u.operations) {
+                                // Map op to step shape if it already looks like step
+                                const s = op.type ? op : (op.step || null);
+                                if (s) steps.push(s);
+                            }
+                        }
+                    } catch (e) { /* ignore */ }
+                }
+
+                // determine target tab
+                let tabId = tabIdOverride;
+                if (!tabId) {
+                    const tabs = await new Promise(res => chrome.tabs.query({ active: true, currentWindow: true }, res));
+                    tabId = tabs && tabs[0] && tabs[0].id;
+                }
+                if (!tabId) { try { sendResponse({ ok: false, error: 'no active tab' }); } catch (e) { } ; return; }
+
+                const results = [];
+                for (const step of steps) {
+                    // simple allowlist check
+                    if (!step || !step.type) { results.push({ ok: false, error: 'invalid step' }); continue; }
+                    if (dryRun) {
+                        results.push({ ok: true, dryRun: true, step });
+                        await new Promise(r => setTimeout(r, speedMs));
+                        continue;
+                    }
+                    const res = await new Promise((resolve) => {
+                        try {
+                            chrome.tabs.sendMessage(tabId, { type: 'AGENT_ACTION', step }, (resp) => {
+                                if (chrome.runtime.lastError) return resolve({ ok: false, error: chrome.runtime.lastError.message });
+                                resolve(resp || { ok: true });
+                            });
+                        } catch (e) { resolve({ ok: false, error: e.message }); }
+                    });
+                    results.push(res);
+                    await new Promise(r => setTimeout(r, speedMs));
+                }
+
+                try { sendResponse({ ok: true, results }); } catch (e) { }
+            } catch (err) {
+                try { sendResponse({ ok: false, error: err && err.message ? err.message : String(err) }); } catch (e) { }
+            }
+        })();
+        return true;
+    }
+
+        // Start a stateful agent session: background will orchestrate model <-> page tool loop
+        if (request && request.action === 'START_AGENT_SESSION') {
+                (async () => {
+                        // create session id and register (persisted)
+                        const sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+                        activeAgentSessions[sessionId] = { sessionId, cancelled: false, startedAt: Date.now(), history: [], status: 'active' };
+
+                        // persist initial session record (best-effort)
+                        try { await putSessionRecord(activeAgentSessions[sessionId]); } catch (e) { /* swallow */ }
+
+                        // notify UI that session started (so it can offer cancel)
+                        try { chrome.runtime.sendMessage({ action: 'AGENT_SESSION_STARTED', sessionId, started: true }); } catch (e) { }
+
+                    try {
+                        // determine active tab if not provided
+                        let tabId = request.tabId;
+                        if (!tabId) {
+                            const tabs = await new Promise(res => chrome.tabs.query({ active: true, currentWindow: true }, res));
+                            tabId = tabs && tabs[0] && tabs[0].id;
+                        }
+                        const cfg = request.generationConfig || {};
+                        // choose simulation if requested in request or via extension storage
+                        const useSim = Boolean(cfg.simulate === true);
+                        const shouldCancel = () => !!(activeAgentSessions[sessionId] && activeAgentSessions[sessionId].cancelled);
+                        let result;
+                        if (useSim) {
+                            result = await runSimAgentSession({ initialPrompt: request.prompt || request.initialPrompt || '', systemInstruction: request.systemInstruction || '', apiKey: request.apiKey, tabId, generationConfig: cfg, sessionId, shouldCancel });
+                        } else {
+                            result = await runAgentSession({ initialPrompt: request.prompt || request.initialPrompt || '', systemInstruction: request.systemInstruction || '', apiKey: request.apiKey, tabId, generationConfig: cfg, sessionId, shouldCancel });
+                        }
+                        try { sendResponse({ ok: true, result, sessionId }); } catch (e) { /* swallow */ }
+                    } catch (err) {
+                        try { sendResponse({ ok: false, error: err && err.message ? err.message : String(err) }); } catch (e) { }
+                    } finally {
+                        try {
+                            const rec = activeAgentSessions[sessionId] || archivedAgentSessions[sessionId] || { sessionId };
+                            rec.endedAt = Date.now();
+                            rec.status = 'archived';
+                            rec.updatedAt = Date.now();
+                            // move to archive in-memory
+                            archivedAgentSessions[sessionId] = rec;
+                            delete activeAgentSessions[sessionId];
+                            // persist final record
+                            try { await putSessionRecord(rec); } catch (e) { /* swallow */ }
+                        } catch (e) { /* swallow */ }
+                    }
+                })();
+                return true; // keep channel open
+        }
+
+            // Cancel a running agent session
+            if (request && request.action === 'CANCEL_AGENT_SESSION') {
+                const sid = request.sessionId;
+                if (sid && activeAgentSessions[sid]) {
+                    activeAgentSessions[sid].cancelled = true;
+                    try { chrome.runtime.sendMessage({ action: 'AGENT_SESSION_UPDATE', update: { sessionId: sid, type: 'cancel_ack' } }); } catch (e) { }
+                    // persist cancel ack
+                    try { appendSessionHistory(sid, { sessionId: sid, type: 'cancel_ack', ts: Date.now() }).catch(() => {}); } catch (e) { }
+                    try { sendResponse({ ok: true, sessionId: sid }); } catch (e) { }
+                } else {
+                    try { sendResponse({ ok: false, error: 'session not found' }); } catch (e) { }
+                }
+                return true;
+            }
 
     // Forward structured agent actions to the active tab's content script.
     // Caller (sidebar/dashboard) sends: { action: 'AGENT_ACTION', step: { ... } }

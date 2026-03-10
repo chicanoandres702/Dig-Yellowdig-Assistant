@@ -9,6 +9,40 @@ const GEMINI_CONFIG = {
     TIMEOUT_MS: 15000
 };
 
+// Tools / function declarations used for agentic flows (Gemini 3 Flash)
+const AGENT_TOOLS = [
+    {
+        name: "CLICK",
+        description: "Simulate a touch-tap on a mobile element center.",
+        parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] }
+    },
+    {
+        name: "TYPE",
+        description: "Type text into an input field.",
+        parameters: { type: "object", properties: { id: { type: "string" }, text: { type: "string" } }, required: ["id", "text"] }
+    },
+    {
+        name: "BATCH",
+        description: "Execute multiple operations in a single turn for efficiency.",
+        parameters: { type: "object", properties: { operations: { type: "array", items: { type: "object", properties: { type: { type: "string", enum: ["CLICK", "TYPE"] }, id: { type: "string" }, text: { type: "string" } } } } } }
+    },
+    {
+        name: "SCROLL",
+        description: "Scroll the viewport.",
+        parameters: { type: "object", properties: { direction: { type: "string", enum: ["up", "down"] } } }
+    },
+    {
+        name: "SWITCH_TAB",
+        description: "Change focus to a different browser tab.",
+        parameters: { type: "object", properties: { tab_index: { type: "integer" } } }
+    },
+    {
+        name: "ANSWER",
+        description: "Provide a final information response to the user.",
+        parameters: { type: "object", properties: { text: { type: "string" } } }
+    }
+];
+
 let lastRequestTime = 0;
 let apiCooldownUntil = 0;
 const requestQueue = [];
@@ -152,4 +186,74 @@ async function _executeGeminiRequest({ persona, prompt, apiKey, systemInstructio
         }
     }
     return 'Error contacting model.';
+}
+
+// Agent-specific request: returns the raw model part (including functionCall and thought_signature)
+async function _executeAgentRequest({ contents, apiKey, systemInstruction, DIG_SYSTEM_INSTRUCTION = '', generationConfig = {} }) {
+    const finalSystemInstruction = (DIG_SYSTEM_INSTRUCTION || '') + (systemInstruction ? '\n\n' + systemInstruction : '');
+    const resolvedKey = await getGeminiApiKey(apiKey);
+
+    if (!resolvedKey) throw new Error('No API key provided.');
+
+    const GEMINI = (typeof window !== 'undefined' && window.GEMINI_MODEL) ? window.GEMINI_MODEL : (typeof GEMINI_MODEL !== 'undefined' ? GEMINI_MODEL : 'gemini-flash-latest');
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI}:generateContent?key=${encodeURIComponent(resolvedKey)}`;
+
+    const payload = {
+        contents: contents && contents.length ? contents : [],
+        systemInstruction: finalSystemInstruction ? { parts: [{ text: finalSystemInstruction }] } : undefined,
+        tools: AGENT_TOOLS,
+        generationConfig: Object.assign({ includeThoughts: true }, generationConfig)
+    };
+
+    const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
+    for (let attempt = 0; attempt <= GEMINI_CONFIG.RETRIES; attempt++) {
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), GEMINI_CONFIG.TIMEOUT_MS);
+
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: controller.signal
+            });
+            clearTimeout(timer);
+
+            if (resp.ok) {
+                const data = await resp.json();
+                // return the raw part object so callers can inspect functionCall/thought_signature
+                return data.candidates?.[0]?.content?.parts?.[0] || null;
+            }
+
+            if (resp.status === 429) {
+                apiCooldownUntil = Date.now() + GEMINI_CONFIG.COOLDOWN_429_MS;
+                if (attempt < GEMINI_CONFIG.RETRIES) {
+                    await sleep(2000 * Math.pow(2, attempt));
+                    continue;
+                }
+                return null;
+            }
+
+            let errText = `Gemini API error ${resp.status}`;
+            try {
+                const errJson = await resp.json();
+                if (errJson?.error?.message) errText += ': ' + errJson.error.message;
+            } catch (ee) { }
+            throw new Error(errText);
+        } catch (e) {
+            if (attempt < GEMINI_CONFIG.RETRIES) {
+                await sleep(1000 * Math.pow(2, attempt));
+                continue;
+            }
+            console.error('Gemini API Agent Error:', e);
+            throw e;
+        }
+    }
+    return null;
+}
+
+// Exported helper for agent flows. Accepts a pre-built `contents` history array and returns the model part.
+export async function invokeGeminiAgent({ contents = [], apiKey = undefined, systemInstruction = '', generationConfig = {} } = {}) {
+    return await _executeAgentRequest({ contents, apiKey, systemInstruction, generationConfig });
 }
