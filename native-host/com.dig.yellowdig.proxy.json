@@ -1,0 +1,9 @@
+{
+  "name": "com.dig.yellowdig.proxy",
+  "description": "Native host to manage the local Gemini proxy for Dig Yellowdig Assistant.",
+  "path": "C:\\Program Files\\nodejs\\node.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://__EXTENSION_ID__/"
+  ]
+}

@@ -13,7 +13,48 @@
 let runAgentSession = async () => { throw new Error('Agent engine not available'); };
 let runSimAgentSession = runAgentSession;
 
+// Probe for a local Gemini proxy (development convenience). If a responsive
+// proxy is found, expose a global `GEMINI_PROXY_URL` so `gemini-api.service.js`
+// can detect and route requests through it. This keeps the proxy opt-in and
+// non-fatal when not running.
 (async function loadOptionalAgentModules() {
+    try {
+        const probeHosts = ['http://localhost:5174', 'http://127.0.0.1:5174'];
+        let proxyFound = false;
+        for (const host of probeHosts) {
+            try {
+                const res = await fetch(host.replace(/\/$/, '') + '/health', { method: 'GET', cache: 'no-store' });
+                if (res && res.ok) {
+                    try { self.GEMINI_PROXY_URL = host; console.info('[background] detected local gemini proxy at', host); } catch (e) {}
+                    proxyFound = true;
+                    break;
+                }
+            } catch (e) { /* ignore probe errors */ }
+        }
+
+        // If no proxy was detected, attempt to ask a registered native host to start it.
+        if (!proxyFound) {
+            try {
+                if (chrome && chrome.runtime && typeof chrome.runtime.sendNativeMessage === 'function') {
+                    try {
+                        chrome.runtime.sendNativeMessage('com.dig.yellowdig.proxy', { action: 'ensure_running', port: 5174 }, (resp) => {
+                            if (chrome.runtime.lastError) {
+                                console.warn('[background] native messaging error starting proxy:', chrome.runtime.lastError.message);
+                                return;
+                            }
+                            try {
+                                if (resp && resp.ok) {
+                                    self.GEMINI_PROXY_URL = resp.host || 'http://127.0.0.1:5174';
+                                    console.info('[background] native host started local gemini proxy at', self.GEMINI_PROXY_URL);
+                                }
+                            } catch (e) { /* ignore */ }
+                        });
+                    } catch (e) { /* ignore sendNativeMessage errors */ }
+                }
+            } catch (e) { /* ignore */ }
+        }
+    } catch (e) { /* ignore */ }
+
     try {
         // attempt to execute vendored Ajv (if included)
         await import(chrome.runtime.getURL('src/vendor/ajv.full.js'));
@@ -140,7 +181,7 @@ chrome.runtime.onInstalled.addListener(() => {
     // Try to register the side panel default path for browsers that support programmatic side panel setup
     try {
         if (chrome.sidePanel && typeof chrome.sidePanel.setOptions === 'function') {
-            try { chrome.sidePanel.setOptions({ path: chrome.runtime.getURL('web-assistant.html') }); } catch (e) { /* ignore */ }
+            try { chrome.sidePanel.setOptions({ path: chrome.runtime.getURL('dist/index.html') }); } catch (e) { /* ignore */ }
         }
     } catch (e) { /* ignore */ }
 });
@@ -151,7 +192,7 @@ chrome.action.onClicked.addListener((tab) => {
         // Preferred: set the side panel to our extension page and open it
         if (chrome.sidePanel && typeof chrome.sidePanel.setOptions === 'function') {
             try {
-                chrome.sidePanel.setOptions({ path: chrome.runtime.getURL('web-assistant.html') }, () => {
+                chrome.sidePanel.setOptions({ path: chrome.runtime.getURL('dist/index.html') }, () => {
                     try { if (typeof chrome.sidePanel.open === 'function') chrome.sidePanel.open(); } catch (e) {}
                 });
                 return;
@@ -177,7 +218,7 @@ try {
         try {
             if (chrome.sidePanel && typeof chrome.sidePanel.setOptions === 'function') {
                 try {
-                    chrome.sidePanel.setOptions({ path: chrome.runtime.getURL('web-assistant.html') }, () => {
+                    chrome.sidePanel.setOptions({ path: chrome.runtime.getURL('dist/index.html') }, () => {
                         try { if (typeof chrome.sidePanel.open === 'function') chrome.sidePanel.open(); } catch (e) {}
                     });
                     return;
