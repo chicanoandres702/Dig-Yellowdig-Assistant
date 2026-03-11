@@ -1,0 +1,14 @@
+{
+  // Exclude local browser debug caches from search/indexing to reduce noise
+  "files.exclude": {
+    "**/.edge-debug-profile": true,
+    "**/.edge-debug-profile/**": true
+  },
+  "search.exclude": {
+    "**/.edge-debug-profile": true,
+    "**/.edge-debug-profile/**": true
+  },
+  "files.watcherExclude": {
+    "**/.edge-debug-profile/**": true
+  }
+}

@@ -49,6 +49,20 @@ const requestQueue = [];
 let isProcessingQueue = false;
 
 /**
+ * If a local proxy is available, frontend can call it instead of the public API.
+ * Set `window.__GEMINI_PROXY_URL` (e.g. http://localhost:5174) to enable.
+ */
+function _getProxyUrl() {
+    try {
+        if (typeof window !== 'undefined' && window.__GEMINI_PROXY_URL) return window.__GEMINI_PROXY_URL;
+    } catch (e) { /* ignore */ }
+    try {
+        if (typeof GEMINI_PROXY_URL !== 'undefined') return GEMINI_PROXY_URL;
+    } catch (e) {}
+    return null;
+}
+
+/**
  * Resolves the Gemini API key from local storage or defaults.
  */
 async function getGeminiApiKey(providedKey) {
@@ -126,7 +140,6 @@ async function _executeGeminiRequest({ persona, prompt, apiKey, systemInstructio
     if (!resolvedKey) throw new Error('No API key provided.');
 
     const GEMINI = (typeof window !== 'undefined' && window.GEMINI_MODEL) ? window.GEMINI_MODEL : (typeof GEMINI_MODEL !== 'undefined' ? GEMINI_MODEL : 'gemini-flash-latest');
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI}:generateContent?key=${encodeURIComponent(resolvedKey)}`;
 
     const parts = [{ text: persona + '\n' + prompt }];
     if (imageParts && imageParts.length > 0) {
@@ -140,6 +153,24 @@ async function _executeGeminiRequest({ persona, prompt, apiKey, systemInstructio
         systemInstruction: finalSystemInstruction ? { parts: [{ text: finalSystemInstruction }] } : undefined
     };
 
+    // If a proxy URL is provided, forward the request to the proxy which will
+    // perform the model call using a server-side key. This avoids exposing the
+    // API key in the client and allows centralized rate limiting / logging.
+    const proxyUrl = _getProxyUrl();
+    let url = null;
+    let fetchOptions = null;
+    if (proxyUrl) {
+        url = proxyUrl.replace(/\/$/, '') + '/api/gemini';
+        fetchOptions = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: GEMINI, payload })
+        };
+    } else {
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI}:generateContent?key=${encodeURIComponent(resolvedKey)}`;
+        fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
+    }
+
     const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
     for (let attempt = 0; attempt <= GEMINI_CONFIG.RETRIES; attempt++) {
@@ -147,12 +178,7 @@ async function _executeGeminiRequest({ persona, prompt, apiKey, systemInstructio
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), GEMINI_CONFIG.TIMEOUT_MS);
 
-            const resp = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-                signal: controller.signal
-            });
+            const resp = await fetch(url, Object.assign({}, fetchOptions, { signal: controller.signal }));
             clearTimeout(timer);
 
             if (resp.ok) {
@@ -196,7 +222,6 @@ async function _executeAgentRequest({ contents, apiKey, systemInstruction, DIG_S
     if (!resolvedKey) throw new Error('No API key provided.');
 
     const GEMINI = (typeof window !== 'undefined' && window.GEMINI_MODEL) ? window.GEMINI_MODEL : (typeof GEMINI_MODEL !== 'undefined' ? GEMINI_MODEL : 'gemini-flash-latest');
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI}:generateContent?key=${encodeURIComponent(resolvedKey)}`;
 
     const payload = {
         contents: contents && contents.length ? contents : [],
@@ -205,6 +230,17 @@ async function _executeAgentRequest({ contents, apiKey, systemInstruction, DIG_S
         generationConfig: Object.assign({ includeThoughts: true }, generationConfig)
     };
 
+    const proxyUrl = _getProxyUrl();
+    let url = null;
+    let fetchOptions = null;
+    if (proxyUrl) {
+        url = proxyUrl.replace(/\/$/, '') + '/api/gemini';
+        fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: GEMINI, payload }) };
+    } else {
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI}:generateContent?key=${encodeURIComponent(resolvedKey)}`;
+        fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
+    }
+
     const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
     for (let attempt = 0; attempt <= GEMINI_CONFIG.RETRIES; attempt++) {
@@ -212,12 +248,7 @@ async function _executeAgentRequest({ contents, apiKey, systemInstruction, DIG_S
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), GEMINI_CONFIG.TIMEOUT_MS);
 
-            const resp = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-                signal: controller.signal
-            });
+            const resp = await fetch(url, Object.assign({}, fetchOptions, { signal: controller.signal }));
             clearTimeout(timer);
 
             if (resp.ok) {

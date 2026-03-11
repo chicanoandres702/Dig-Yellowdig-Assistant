@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        // Development: use local Gemini proxy server if available
+        try { window.__GEMINI_PROXY_URL = window.__GEMINI_PROXY_URL || 'http://localhost:5174'; } catch (e) {}
+    </script>
     <title>PagePilot | Extension Mission Control</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -415,5 +419,11 @@
 
     <!-- Connect external script here -->
     <script type="module" src="web-assistant.js"></script>
+    <!-- Built React UI (Vite) -->
+    <link rel="stylesheet" href="dist/assets/index-CkQQWlJ7.css">
+    <script type="module" src="dist/assets/index-Dj9hDXZ1.js"></script>
+    <!-- Prebuilt POC ext-bridge and app (Option B) -->
+    <script src="prebuilt/ext-bridge.js"></script>
+    <script src="prebuilt/pagepilot.poc.js" defer></script>
 </body>
 </html>

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="/boot-prompt.js" defer></script>
+    <title>Document</title>
+    <style>
+      .bardeen-hint {
+        all: unset;
+
+        align-items: center;
+        background: #202124;
+        border-radius: 8px;
+        color: #ffffff;
+        display: flex;
+        font-family: "Inter" helvetica;
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 500;
+        padding: 12px 16px;
+        position: fixed;
+        right: 8px;
+        text-align: center;
+        z-index: 2147483647;
+      }
+      .bardeen-hint > *:not(:first-child) {
+        margin-left: 12px;
+      }
+      #bardeen-loader {
+        top: 8px;
+      }
+      #bardeen-retry {
+        top: 58px;
+        max-width: 400px;
+      }
+      #bardeen-retry-btn {
+        text-align: center;
+      }
+      #bardeen-retry-btn button {
+        background: #6f60cc;
+        border: 0;
+        border-radius: 6px;
+        color: white;
+        font-family: "Inter" helvetica;
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 500;
+        margin-top: 16px;
+        padding: 12px 16px;
+        cursor: pointer;
+      }
+      #bardeen-retry-btn button:hover {
+        background: #8c80d6;
+      }
+      body:not([data-status="retry"]) #bardeen-retry {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bardeen-loader" class="bardeen-hint">
+      <img
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAKgSURBVHgBjVTBahRBEK3q7omJIbDRmyLpFTwKyU3MwfUDPPgFiSiCeNAcA8JOvmD1IBJySHIS/8HD6g+4Zy/ZCCGgBpaImexOT1equ2d2Z5PdTQpmqrum+3W9VzWNUDLa2qqBwhUAWwNCzaEOILTA0i4+f7kDVzAcgG3W+R33o1SsyCeELVD2KT571b4UkDY/1nlPPBQtA1IxgTYkvSVcW+uMAxT0qaEhy2LIDLAPj3Ge5zb3g28alHgLE0xA19bBFBvMMICLmzJwytlmb6jRqIwDVLygBgYGWpX5FlPIaQf6FcBUc7A1GtAwjbJmBZI/AJtet3Px4+pSbW8vqVSrM80LgCQsH0jldIKz0ML1d49HZXHwK9mOiBoH+ydtIeTOqTn5UK3O+0IJmsNcHzusnzUjKflNAlAqBKmERmHjmanpH4eHifbfzG1ZKkg2KIbzY0xGAqREELxVeI+a3banbG5JUHsSxJEp9xuUev4iIDIbKXJJ0ZeLJ7W/v3urAtIUuvcjoGm8FKgwFUlSnJJytCWg4kwVHzA1hSvKAVIEcPpAgdrPQB1ykZLJoKzfojuYODfEsJYCu0Xl9eLciRDSBZZvQYDoMKX5e7XuerZ9Hsxa0rx8MezH0F2elR9UGLDX5gXahzGcms2y2FFHs0qrQxJgkM5n5y+MECu1cVtBL/3GSDpkCf2v9P8P99QpYHS91PTUz2bwE2FB10WbwppsB1lHp6WnnxpA9pQcg93/7noub49+i/ixLMYijMNcbIi5J++bWS/dwNQEUFck7w2Yn1+BTo7gCuZS3GDJ2n2B/n15EfNhdS90rpejImZv0rWHrxHn70wCdGBxvm1gyedVzTdVzLI8YjBd/rdVdRnU3WXAGwtB13BpNPnZZbBmgXEGpHZBNAgDHW8AAAAASUVORK5CYII="
+      />
+      <img
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIMAAAAUCAYAAACu/o6dAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAP4SURBVHgB7VjtcdswDIV7/d92gjATVJmg2iDeIMoE8QZ2JrA6gdwJ7EwgZ4KkE0iewM4ELHF8jCBYluTWzuVSvTuczC/gEQQhWEQDBgwYMGDAgAE9Ya01Tr7SO0YXRzcWOUnPuQ9wqAmdEefWf8ho4SSjdwzrMWsZX2COofNxyO0+2HdjOjEQbIyY3gif6INgNBol7nHpniWdF2u2A7lysnOSvffM2ge9goE36mTqZInbkajxVN4OzM9CVPOYkzmiPWvSgXmJsHHX5GD0LyFG9LP9qeYkdC71LQOfFPZmeNVkXdmFAw7y7Jo/nTBPySUW+0w1T/giAqdE+CxwyaBT712eA0tE7T5M1FiKcemT13PrmxmWTiZONk4enfBmlmL82okkxhtJqHJQhDaveaHqNs0EUT7I8Kr6DXu54nHjZAwerPNJBEywITnNsSbMz8PB4JljnO19x3zJuw9iJyWEcACsl3k9gkcTT94r+2GHsSfBZUSVL0jwfcJanvMCvRMxZ449bCBzW3/9M5cp7OzApX5JbEvNgGgcywWIsK1aP5PErUeC9gztSMzhgynU/LkYj6E3QpuxUuN7NhSnQrQjzJ+IPVh1axfoi6nZFznvG8/we6t0RFbcyBZfyDVJQ18quaBdNPAt1P7GDT6KDvjESJ98pg64VMgRtIJiXmTIR9jR70ik1YAN1TMH45eYuyb/XpZ4luM4e0OHsZa2MT/w5kywVjUGB9sNtaMUPB+c3JHPOFfsK9gpcfgGdvag7MZOdqpvAd0k+DISW8X8F7ZhfWaJ0RfZ6tLJbBR8t5YcpE86gwGGWMEFnhsoNnQ6BNI7elvogO5jnw9tERrIVnzbEid8ezkNz8j7qiSf0vv82+iyHbheqDWLlnHCeEk90BkM5COOo/Iq3GzrXwl6g5LEsVmjxDOi6t1rYHuF7HRq8CHdcLAL/T/oSIjbZdDF2XPh+m+5gVs67VDD9o3ioovDDezdhg45n7MRuu9lhlE6WyGDwdj9Cn9FVcTGTp7xDtOptHTCdcUj5t/REUDKX5MveHbQxw5MyN+wcwTDgjxPLsLuyQfzpMc67adrPEMaDgdr8LsrEBgrcMnA5Svt+zAl/zpifQ/o4+KP/XcJHVP03VJ1DhPX/tb7QqGwaEKM8VT08VwmLYs1I3RwQTXG7wTjteIOfa/Fj9CRCztbWy/ErFUfnWSfbS4gs0Pz0Y5hs8Azkftu8JPkJ/0hK/rE1n2RdvniwLqx5sJ2bP2sclsvKI0a3ypunT7pBev/VZiOOa3jp7JzKlj1HcNW1XdM/wj7l5/4+6yzHZ/C39KHHwLi5k2t/1sW/soWNOD/Q0NqzocbNWDAgAESfwAkpDxFwLAv6wAAAABJRU5ErkJggg=="
+      />
+      <svg
+        width="14px"
+        xmlns="http://www.w3.org/2000/svg"
+        xmlns:xlink="http://www.w3.org/1999/xlink"
+        id="eME3ys5Izig1"
+        viewBox="0 0 14 14"
+        shape-rendering="geometricPrecision"
+        text-rendering="geometricPrecision"
+      >
+        <style>
+          <![CDATA[#eME3ys5Izig2 {animation: eME3ys5Izig2_c_o 2000ms linear infinite normal forwards}@keyframes eME3ys5Izig2_c_o { 0% {opacity: 0} 25% {opacity: 1} 75% {opacity: 1} 100% {opacity: 0}} #eME3ys5Izig3 {animation: eME3ys5Izig3_c_o 2000ms linear infinite normal forwards}@keyframes eME3ys5Izig3_c_o { 0% {opacity: 0} 25% {opacity: 0} 50% {opacity: 1} 75% {opacity: 1} 100% {opacity: 0}} #eME3ys5Izig4 {animation: eME3ys5Izig4_c_o 2000ms linear infinite normal forwards}@keyframes eME3ys5Izig4_c_o { 0% {opacity: 0} 50% {opacity: 0} 75% {opacity: 1} 100% {opacity: 0}}]]>
+        </style>
+        <ellipse
+          id="eME3ys5Izig2"
+          rx="1"
+          ry="1"
+          transform="translate(3 11.2)"
+          opacity="0"
+          fill="#fff"
+          stroke-width="0"
+        />
+        <ellipse
+          id="eME3ys5Izig3"
+          rx="1"
+          ry="1"
+          transform="translate(7 11.2)"
+          opacity="0"
+          fill="#fff"
+          stroke-width="0"
+        />
+        <ellipse
+          id="eME3ys5Izig4"
+          rx="1"
+          ry="1"
+          transform="translate(11 11.2)"
+          opacity="0"
+          fill="#fff"
+          stroke-width="0"
+        />
+      </svg>
+    </div>
+
+    <div id="bardeen-retry" class="bardeen-hint">
+      <div>
+        <span
+          >Starting Bardeen is taking longer than expected. This may be fine - e.g. if you're on a
+          slow internet connection. If you're seeing this for a long time, please click:</span
+        >
+        <div id="bardeen-retry-btn">
+          <button>Retry</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

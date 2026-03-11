@@ -1,0 +1,10 @@
+{
+   "extensionDescription": {
+      "description": "Extension description",
+      "message": "Turn your browser into a self-driving AI agent. Automate scraping, data entry, and monitoring with simple natural language prompts."
+   },
+   "extensionName": {
+      "description": "Extension name",
+      "message": "rtrvr.ai: AI Web Agent"
+   }
+}

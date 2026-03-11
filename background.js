@@ -4,9 +4,31 @@
 // Ensure vendored Ajv bundle executes early in the service-worker so
 // the Ajv loader (src/vendor/ajv.js) can detect a full Ajv constructor
 // on the global object when imported by the agent engine.
-import './src/vendor/ajv.full.js';
-import { runAgentSession } from './src/features/agent/agent.engine.js';
-import { runSimAgentSession } from './src/features/agent/agent.simulator.js';
+//
+// NOTE: load agent-related modules dynamically and non-fatally. Static
+// top-level imports will cause the entire service worker registration to
+// fail if optional modules are missing from the packaged extension. Use
+// dynamic import() and fall back to no-op functions so the SW can still
+// start when agent modules are not present.
+let runAgentSession = async () => { throw new Error('Agent engine not available'); };
+let runSimAgentSession = runAgentSession;
+
+(async function loadOptionalAgentModules() {
+    try {
+        // attempt to execute vendored Ajv (if included)
+        await import(chrome.runtime.getURL('src/vendor/ajv.full.js'));
+    } catch (e) { /* optional: vendor Ajv not present */ }
+
+    try {
+        const m = await import(chrome.runtime.getURL('src/features/agent/agent.engine.js'));
+        if (m && typeof m.runAgentSession === 'function') runAgentSession = m.runAgentSession;
+    } catch (e) { /* optional: agent engine not present */ }
+
+    try {
+        const m2 = await import(chrome.runtime.getURL('src/features/agent/agent.simulator.js'));
+        if (m2 && typeof m2.runSimAgentSession === 'function') runSimAgentSession = m2.runSimAgentSession;
+    } catch (e) { /* optional: simulator not present */ }
+})();
 let logBuffer = [];
 // Track active agent sessions so they can be cancelled
 const activeAgentSessions = {};
@@ -208,6 +230,14 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const tabId = sender.tab?.id;
+
+    // Lightweight health-check ping used by UI pages to verify the SW is reachable
+    if (request && (request.action === 'PING' || request.type === 'PING')) {
+        try {
+            sendResponse({ ok: true, extensionId: (chrome && chrome.runtime && chrome.runtime.id) ? chrome.runtime.id : null });
+        } catch (e) { /* ignore sendResponse errors */ }
+        return true;
+    }
 
     if (request.type === 'DIG_DEBUG_LOG') {
         logBuffer.push(request.log);
@@ -542,8 +572,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         const shouldCancel = () => !!(activeAgentSessions[sessionId] && activeAgentSessions[sessionId].cancelled);
                         let result;
                         if (useSim) {
+                            if (typeof runSimAgentSession !== 'function') {
+                                throw new Error('Agent simulator not available in this build');
+                            }
                             result = await runSimAgentSession({ initialPrompt: request.prompt || request.initialPrompt || '', systemInstruction: request.systemInstruction || '', apiKey: request.apiKey, tabId, generationConfig: cfg, sessionId, shouldCancel });
                         } else {
+                            if (typeof runAgentSession !== 'function') {
+                                throw new Error('Agent engine not available in this build');
+                            }
                             result = await runAgentSession({ initialPrompt: request.prompt || request.initialPrompt || '', systemInstruction: request.systemInstruction || '', apiKey: request.apiKey, tabId, generationConfig: cfg, sessionId, shouldCancel });
                         }
                         try { sendResponse({ ok: true, result, sessionId }); } catch (e) { /* swallow */ }

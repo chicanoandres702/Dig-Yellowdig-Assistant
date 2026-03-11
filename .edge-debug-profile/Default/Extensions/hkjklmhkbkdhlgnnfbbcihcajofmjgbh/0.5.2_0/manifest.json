@@ -1,0 +1,26 @@
+{
+   "action": {
+   },
+   "background": {
+      "service_worker": "worker.js"
+   },
+   "default_locale": "en",
+   "description": "__MSG_description__",
+   "homepage_url": "https://webextension.org/listing/access-control.html",
+   "host_permissions": [ "\u003Call_urls>" ],
+   "icons": {
+      "128": "/data/icons/disabled/128.png",
+      "16": "/data/icons/disabled/16.png",
+      "256": "/data/icons/disabled/256.png",
+      "32": "/data/icons/disabled/32.png",
+      "48": "/data/icons/disabled/48.png",
+      "512": "/data/icons/disabled/512.png",
+      "64": "/data/icons/disabled/64.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlWVyqqvXNlXUEPzzVImAOJGJmknFyGZDfgrtzNRz25Z5ABJa5eqxPsrFZ6/M1bmUOmjX7cemxC+u5g1/Sn2TSAy3TU78+Z5xE5+0/tiHcZYvIlPMIApH85zf2KFTA21nxmEVyEs9FiN3sJBjZOAGerV7HhE34Sy1pD6jynbyeJmyqa9Q9VFfap0LQgnFEcvM7UowGpP8UTeE53jQZSEJbKIbBjrprAgDMGRmHrcHg79G2E8BgnQDYkPbSgsXn5FcBFIHAgCxbJoR/MUxXA1/jAJQTMFJE9ZPOA7VLos70g2BK45ZD7rCMY06oY3ARunXnW7bKwWC/tD12nAQ7fAQAwIDAQAB",
+   "manifest_version": 3,
+   "name": "CORS Unblock",
+   "permissions": [ "storage", "declarativeNetRequest", "debugger" ],
+   "update_url": "https://edge.microsoft.com/extensionwebstorebase/v1/crx",
+   "version": "0.5.2"
+}

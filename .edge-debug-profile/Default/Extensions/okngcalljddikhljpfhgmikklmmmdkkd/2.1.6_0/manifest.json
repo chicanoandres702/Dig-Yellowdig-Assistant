@@ -1,0 +1,45 @@
+{
+   "action": {
+      "default_icon": {
+         "128": "assets/icon128.png",
+         "16": "assets/icon16.png",
+         "32": "assets/icon32.png",
+         "48": "assets/icon48.png"
+      },
+      "default_title": "Agent OS"
+   },
+   "background": {
+      "service_worker": "background/background.js",
+      "type": "module"
+   },
+   "content_scripts": [ {
+      "all_frames": true,
+      "js": [ "domBundle/domBundle.js" ],
+      "matches": [ "\u003Call_urls>" ],
+      "run_at": "document_idle"
+   } ],
+   "description": "AI-powered browser automation agent. Auto-fill forms, scrape data, automate workflows with intelligent task planning & execution.",
+   "externally_connectable": {
+      "matches": [ "https://portal.agent0s.dev/*", "https://*.agent0s.dev/*" ]
+   },
+   "host_permissions": [ "\u003Call_urls>", "https://portal.agent0s.dev/*" ],
+   "icons": {
+      "128": "assets/icon128.png",
+      "16": "assets/icon16.png",
+      "32": "assets/icon32.png",
+      "48": "assets/icon48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAl+/MfbvVkO39UmVlUjcKruKhJrK1LkbIn4AtSelluvOEycdMgeI+uXZ0QxTp+vBeipDku6ZUehuRa0DfKp5GzUkgcHlqKFRw1MZqFnL9Nndvkkm8FtuvfOQLhLbAsRNB9AAnEsc8KD05cJIpLU6kQRqb/4G1kGONwQThwD4krS4biIQiEPTPWKbO8eZXXNEsLwAm55nWHIYTMla3gJXPTP0eibhdKx5Jg8RlMe9A/hrMA9yZA+HGso9yWQdL2NsqA3lRvFI0Y6XuGyJ78/sM4gbFlUuep6CpFW23bu7EFKQZIMaFv7ky07MZ9AARrGDFkxIy8x7lgt2ntTN0wG5s8wIDAQAB",
+   "manifest_version": 3,
+   "name": "Agent OS - AI Browser Automation & Smart Assistant for Web Tasks",
+   "permissions": [ "activeTab", "scripting", "storage", "sidePanel", "tabs", "debugger" ],
+   "side_panel": {
+      "default_path": "sidepanel/sidepanel.html"
+   },
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "2.1.6",
+   "web_accessible_resources": [ {
+      "matches": [ "\u003Call_urls>" ],
+      "resources": [ "src/core/utils/readability/Readability.js", "src/core/utils/readability/wrapper.js", "src/utils/jszip.min.js", "src/utils/zipManager.js", "src/utils/imageExtractor.js", "domBundle/domBundle.js" ]
+   } ]
+}

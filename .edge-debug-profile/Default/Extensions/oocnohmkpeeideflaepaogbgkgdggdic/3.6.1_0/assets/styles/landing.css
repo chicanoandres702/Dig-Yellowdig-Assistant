@@ -1,0 +1,215 @@
+body {
+  background: #F9FAFF;
+  font-family: "Helvetica Neue", "Helvetica", sans-serif;
+}
+
+/* Common */
+.wrapper {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.tc-card {
+  display: block;
+
+  border-radius: 10px;
+  box-shadow: 0 3px 2px 0 rgba(0,0,0,0.10);
+  background: #FFF;
+
+  margin-top: 128px;
+}
+
+/* Landing Card */
+.tc-card.landing-card {
+  width: 90%;
+}
+
+@media (min-width: 768px) {
+  .tc-card.landing-card {
+    width: 800px;
+  }
+}
+
+  /* Row */
+  .tc-card.landing-card > .row {
+    /* No Gutters */
+    margin: 0;
+  }
+
+  /* Columns Reset */
+  .tc-card.landing-card > .row > .col-left,
+  .tc-card.landing-card > .row > .col-right {
+    padding: 0;
+  }
+
+  /* Left Column */
+  .tc-card.landing-card > .row > .col-left {
+    min-height: 340px;
+    position: relative;
+  }
+  .tc-card.landing-card > .row > .col-left > .welcome-image {
+    display: inline-block;
+    width: 280px;
+    height: 280px;
+    background: url('../icons/welcome-img.png') no-repeat;
+    background-size: 280px;
+    image-rendering: -webkit-optimize-contrast;
+
+    /* Center Position */
+    position: absolute;
+    top: 20%;
+    left: 50%;
+    transform: translateY(0) translateX(-50%);
+  }
+
+  @media (min-width: 768px) {
+    .tc-card.landing-card > .row > .col-left > .welcome-image {
+      top: 30%;
+      left: 55%;
+      transform: translateY(0) translateX(-50%);
+    }
+  }
+
+  /* Right Column */
+  .tc-card.landing-card > .row > .col-right {
+    min-height: 400px;
+    padding: 60px 40px 60px 40px;
+  }
+  .tc-card.landing-card > .row > .col-right > h1 {
+    font-size: 24px;
+    color: #333;
+    margin: 0;
+    font-weight: 400;
+  }
+  .tc-card.landing-card > .row > .col-right > .options {
+    margin-top: 50px;
+  }
+  .tc-card.landing-card > .row > .col-right > .options > h2 {
+    font-size: 18px;
+    color: #999;
+    font-weight: 400;
+    margin: 0 0 15px;
+  }
+  .tc-card.landing-card > .row > .col-right > .options label {
+    display: block;
+    width: 100%;
+    font-size: 18px;
+    color: #333;
+    font-weight: 400;
+    margin-bottom: 10px;
+  }
+  .tc-card.landing-card > .row > .col-right > .options label > span {
+    color: #ccc;
+  }
+  .tc-card.landing-card > .row > .col-right > .options input {
+    margin: 0;
+    position: relative;
+    top: -2px;
+    margin-right: 4px;
+  }
+  .tc-card.landing-card > .row > .col-right .divider {
+    display: inline-block;
+    height: 1px;
+    width: 50px;
+    margin: 10px 0 10px 24px;
+    background: #ccc;
+  }
+
+  /* Continue */
+  .tc-card.landing-card > .row > .col-right .save {
+    display: block;
+    border: 0;
+    border-radius: 50px;
+    padding: 15px 80px;
+    color: #fff;
+    background: #7A8DFE;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 400;
+    margin: 50px 0 0;
+    outline: 0;
+    transition: all ease-in-out 0.2s;
+  }
+  .tc-card.landing-card > .row > .col-right .save:hover {
+    background: #9AA8FD;
+  }
+
+.download-our-apps {
+  text-align: center;
+  margin-top: 64px;
+}
+
+.download-our-apps h3 {
+  font-weight: normal;
+  margin-bottom: 24px;
+}
+
+.download-our-apps a {
+  text-decoration: none;
+  color: black;
+}
+
+.download-our-apps .icons {
+  display: flex;
+  flex-direction: row;
+}
+
+.download-our-apps .icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 96px;
+}
+
+.download-our-apps .hover-scale:hover {
+  transform: scale(1.2);
+  transition: transform 0.2s ease-in-out 0s;
+}
+
+.download-our-apps .ios {
+  display: inline-block;
+  overflow: hidden;
+  width: 48px;
+  height: 68px;
+  background-size: 1243px 236px;
+  background-position: -478px -68px;
+  background-image: url(../../assets/icons/sprite1d.png);
+  margin-bottom: 6px;
+}
+
+.download-our-apps .android {
+  display: inline-block;
+  overflow: hidden;
+  width: 48px;
+  height: 68px;
+  background-size: 1243px 236px;
+  background-position: -430px -68px;
+  background-image: url(../../assets/icons/sprite1d.png);
+  margin-bottom: 6px;
+}
+
+.download-our-apps .mac {
+  display: inline-block;
+  overflow: hidden;
+  width: 80px;
+  height: 68px;
+  background-size: 1243px 236px;
+  background-position: -686px -68px;
+  background-image: url(../../assets/icons/sprite1d.png);
+  margin-bottom: 6px;
+}
+
+.download-our-apps .windows {
+  display: inline-block;
+  overflow: hidden;
+  width: 80px;
+  height: 68px;
+  background-size: 1243px 236px;
+  background-position: -766px -68px;
+  background-image: url(../../assets/icons/sprite1d.png);
+  margin-bottom: 6px;
+}
+

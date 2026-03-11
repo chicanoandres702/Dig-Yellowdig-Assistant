@@ -1,0 +1,5 @@
+2026/03/10-08:49:58.637 18c0 Creating DB C:\Users\Andrew\OneDrive\Documents\Dig-Yellowdig-Assistant\.edge-debug-profile\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/03/10-08:49:58.648 18c0 Reusing MANIFEST C:\Users\Andrew\OneDrive\Documents\Dig-Yellowdig-Assistant\.edge-debug-profile\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/03/10-08:50:16.293 150c Level-0 table #5: started
+2026/03/10-08:50:16.300 150c Level-0 table #5: 681612 bytes OK
+2026/03/10-08:50:16.302 150c Delete type=0 #3

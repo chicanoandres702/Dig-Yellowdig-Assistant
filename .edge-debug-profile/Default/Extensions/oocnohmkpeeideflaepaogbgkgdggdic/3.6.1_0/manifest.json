@@ -1,0 +1,41 @@
+{
+   "action": {
+      "default_icon": "assets/icons/chrome_taskade/icon@128.png"
+   },
+   "background": {
+      "service_worker": "background.js"
+   },
+   "chrome_url_overrides": {
+      "newtab": "newtab.html"
+   },
+   "commands": {
+      "_execute_action": {
+         "suggested_key": {
+            "default": "Ctrl+Shift+P",
+            "mac": "Command+Shift+P"
+         }
+      }
+   },
+   "default_locale": "en",
+   "description": "AI Agents, task lists, and workflow automation. Get work done faster and smarter with Taskade.",
+   "host_permissions": [ "*://*.taskade.com/*" ],
+   "icons": {
+      "128": "assets/icons/chrome_taskade/icon@128.png",
+      "16": "assets/icons/chrome_taskade/icon@16.png",
+      "19": "assets/icons/chrome_taskade/icon@19.png",
+      "39": "assets/icons/chrome_taskade/icon@39.png",
+      "48": "assets/icons/chrome_taskade/icon@48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxjO2atiooasSBNw5nXxi+0YHfTelxqBx1aBjNeopKz8iZNyYJS934BATFy295N9fssG3gJW08myiNjKkiOub0Ctz0y0yx90FX2SOGircOaUjdAuPeXdF61Vj74XnR1SMMIT947ReKf40u9KgnFrS9ccb9m8nDyI8t0jo0/YlrP5iwa+uD4oBt853oO3VUfJauzUL4F5qmEhsZb53yrYDE5eHYGiJeNkYPdY38Kw2gppQx78sKZIjSzPqZHZxO9/flzF7kwAtJ37+NJW2YBIACcaGiP70Sr1XctupOl1yIgT3DR63CMHXUrtqytKC/pCQR2gBc5TVe3uP0xiCGXGskwIDAQAB",
+   "manifest_version": 3,
+   "name": "Taskade - AI Agents, Chat Bots, & Task Automation",
+   "options_page": "options.html",
+   "permissions": [ "activeTab", "contextMenus", "storage", "tabs", "scripting" ],
+   "short_name": "Taskade",
+   "update_url": "https://edge.microsoft.com/extensionwebstorebase/v1/crx",
+   "version": "3.6.1",
+   "web_accessible_resources": [ {
+      "matches": [ "\u003Call_urls>" ],
+      "resources": [ "popup.html", "popup.js", "content_script.js" ]
+   } ]
+}

@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  :root {
+    --bg: #050c18;
+    --raised: #0d1929;
+    --float: #0f1e32;
+    --sheet: #0c1826;
+    --border: rgba(255,255,255,0.07);
+    --border-md: rgba(255,255,255,0.12);
+    --blue: #5b8dee;
+    --violet: #8b5cf6;
+    --green: #10b981;
+    --red: #ef4444;
+    --hi: #f0f6ff;
+    --tx: #dde8f8;
+    --tx2: #8ea5c4;
+    --tx3: #4e6580;
+    --tx4: #2d4260;
+    --navtot: calc(62px + env(safe-area-inset-bottom, 0px));
+  }
+  
+  html {
+    height: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-[#050c18] text-[#dde8f8] font-sans antialiased overflow-hidden;
+    width: 100%;
+    max-width: 430px;
+    height: 100dvh;
+    margin: 0 auto;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  #root {
+    height: 100%;
+  }
+
+  ::-webkit-scrollbar { width: 2px; }
+  ::-webkit-scrollbar-thumb { background: rgba(91,141,238,0.14); border-radius: 10px; }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-[#060d1a]/90 backdrop-blur-xl;
+  }
+  .btn-primary {
+    @apply flex items-center justify-center gap-2 w-full min-h-[56px] rounded-2xl font-sans text-sm font-bold cursor-pointer transition-all active:scale-95 text-white;
+    background: linear-gradient(135deg, #2563eb, #3d82f4);
+    box-shadow: 0 6px 22px rgba(37,99,235,0.38), 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .btn-vs {
+    @apply flex items-center justify-center gap-2 w-full min-h-[56px] rounded-2xl font-sans text-sm font-bold cursor-pointer transition-all active:scale-95 text-white;
+    background: linear-gradient(135deg, #6d28d9, #8b5cf6);
+    box-shadow: 0 6px 22px rgba(109,40,217,0.38), 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 w-full min-h-[48px] px-4 rounded-lg border border-white/10 bg-white/5 text-[#8ea5c4] font-sans text-xs font-semibold cursor-pointer transition-all active:scale-95 active:bg-white/10;
+  }
+  .inp {
+    @apply w-full block bg-[#030812]/80 border border-white/10 rounded-lg text-[#dde8f8] p-3.5 text-base font-mono focus:outline-none focus:border-[#5b8dee]/50 focus:bg-[#020610]/90 transition-colors;
+  }
+  .sec-header {
+    @apply flex items-center gap-2 px-4 mt-5 mb-2.5 text-[0.66rem] font-bold uppercase tracking-widest text-[#8ea5c4];
+  }
+  .sec-header::after {
+    content: '';
+    @apply flex-1 h-px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.12), transparent);
+  }
+}

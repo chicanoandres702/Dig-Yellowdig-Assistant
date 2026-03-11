@@ -1,0 +1,106 @@
+{
+   "checksum": "2b7237edafe7e8c1574270c7767dbe44",
+   "roots": {
+      "bookmark_bar": {
+         "children": [ {
+            "date_added": "13407894259138055",
+            "date_last_used": "0",
+            "guid": "a5e04491-87b5-45ed-85b8-a600b762c462",
+            "id": "7",
+            "name": "GroupMe - Join the group for Carnival Direct Sales",
+            "show_icon": false,
+            "source": "sync",
+            "type": "url",
+            "url": "https://groupme.com/join_group/111583107/Znya0nos",
+            "visit_count": 0
+         }, {
+            "date_added": "13407994238117542",
+            "date_last_used": "0",
+            "guid": "b528afe7-85e9-49d3-aee2-58cbf15b8e97",
+            "id": "8",
+            "name": "Join from Zoom Workplace app - Zoom",
+            "show_icon": false,
+            "source": "sync",
+            "type": "url",
+            "url": "https://ariseplatform.zoom.us/j/7347190415?_x_zm_rtaid=TeHrFXHjRJy_LjKZeItM8Q.1763520631522.e8368cd72cffac18c5643ad58ea47476&_x_zm_rhtaid=376#success",
+            "visit_count": 0
+         }, {
+            "date_added": "13413871208061678",
+            "date_last_used": "0",
+            "guid": "8d047ccc-981b-4a80-a075-be5f523acd8e",
+            "id": "9",
+            "name": "Swagger UI",
+            "show_icon": false,
+            "source": "sync",
+            "type": "url",
+            "url": "https://api.getsling.com/",
+            "visit_count": 1
+         }, {
+            "date_added": "13414069762586820",
+            "date_last_used": "0",
+            "guid": "51e6f2fe-c4c5-45f5-a39b-6a7e83e0a546",
+            "id": "10",
+            "name": "Flow",
+            "show_icon": false,
+            "source": "sync",
+            "type": "url",
+            "url": "https://labs.google/fx/tools/flow",
+            "visit_count": 1
+         }, {
+            "date_added": "13417254242425042",
+            "date_last_used": "0",
+            "guid": "c537535e-4452-4ae1-9201-7fd4b1a1550c",
+            "id": "11",
+            "name": "Sentient AI Browser - Firebase Studio",
+            "show_icon": false,
+            "source": "sync",
+            "type": "url",
+            "url": "https://studio.firebase.google.com/studio-460431735",
+            "visit_count": 1
+         } ],
+         "date_added": "13417631386930738",
+         "date_last_used": "0",
+         "date_modified": "13417254242425042",
+         "guid": "0bc5d13f-2cba-5d74-951f-3f233fe6c908",
+         "id": "1",
+         "name": "Favorites bar",
+         "source": "unknown",
+         "type": "folder"
+      },
+      "other": {
+         "children": [  ],
+         "date_added": "13417631386930738",
+         "date_last_used": "0",
+         "date_modified": "0",
+         "guid": "82b081ec-3dd3-529c-8475-ab6c344590dd",
+         "id": "2",
+         "name": "Other favorites",
+         "source": "unknown",
+         "type": "folder"
+      },
+      "synced": {
+         "children": [  ],
+         "date_added": "13417631386930738",
+         "date_last_used": "0",
+         "date_modified": "0",
+         "guid": "4cf2e351-0e85-532b-bb37-df045d8f8d0f",
+         "id": "3",
+         "name": "Mobile favorites",
+         "source": "unknown",
+         "type": "folder"
+      },
+      "workspaces_v2": {
+         "children": [  ],
+         "date_added": "13417631386930738",
+         "date_last_used": "0",
+         "date_modified": "0",
+         "guid": "75aa6670-344f-549d-b742-660f029506ab",
+         "id": "5",
+         "name": "Workspaces",
+         "source": "unknown",
+         "type": "folder"
+      }
+   },
+   "sync_metadata": "CjEKDgiIgQISCNro9cGcAQAAEgAqGEh5VGgyWCtpQVdHakVPNWFvTU9yWFE9PUgDoAYKEo4BCAUSiQEKHHdSQnJaTCs2UEE5YXZLZ2pOUDdKWERMY2Z2cz0SJGIwZjQyZDE2LWE3NjItNTVmNi05YTdlLTAyNzJiNzk5Mjc2NhgAIAAoADDHztPjmDM4udLT45gzQLnS0+OYM0ocbm14NjVzUUR2eEk4VGdFZXYrQStudHRvU240PVoAZQAAAADCPgJgABKOAQgDEokBChxuamdEdTg4ZUNydlhwODZwRDdmSEdjcUZwODg9EiQ3YTgwZDZlZi0yMWI5LTVlMzctYmRiOC0xNzRkZmUxMjkyOGEYACAAKAAwyM7T45gzONfS0+OYM0DX0tPjmDNKHHl6TkIwMWNuNTRBN2NSVTB1VCsvUGdtVHRVbz1aAGUAAAAAwj4CYAASrQEIChKoAQocWDFrbmFkVmtpMFpkSzhUQTl6cDdmZmJwWWRrPRIkNTFlNmYyZmUtYzRjNS00NWY1LWEzOWItNmE3ZTgzZTBhNTQ2GAAgACgAMJrBoJvJMzjRv5qhwDNA0b+aocAzShxpSkZPZmpla3lyMUliS2Q2SGpNMkhwdzkwVWM9Wh8iHeoybHRqWlhXQkppamwrWlJHdFRFdjNmTFdmVXc9Za5t1jvCPgJgBRKtAQgLEqgBChxHKzBEcWNyOTh1TGFLS2Vna3dRNkR5ang2SDg9EiRjNTM3NTM1ZS00NDUyLTRhZTEtOTIwMS03ZmQ0YjFhMTU1MGMYACAAKAAw2dHXj8wzOOrS14/MM0Dq0tePzDNKHFZPbXEzU0Z6Z2w3QlU1ZFkzU1dpUE1IVnhyMD1aHyId9TYxdzgvazk2dTFsMTYzK3B3R1ZkZ2MyR2llRT1lXAkm3MI+AmAFEq0BCAkSqAEKHFVLWWplRzRJSWhIcG1lTU9JaVNiUy90eXFoaz0SJDhkMDQ3Y2NjLTk4MWItNGE4MC1hMDc1LWJlNWY1MjNhY2Q4ZRgAIAAoADC4zcPCvzM4x/7Cwr8zQMf+wsK/M0ocTmRLOXN4amtxU095Mzd0NE42Snd4M1h0U25FPVofIh3VSWRUSERrVm1aQm9UZWFtcGUxK3NtNjVyYnY4PWW1uTTNwj4CYAUSrQEICBKoAQocNkpLUHp1aS85dlM5dFVjZ3dQKy9NZ0E4T1FFPRIkYjUyOGFmZTctODVlOS00OWQzLWFlZTItNThjYmYxNWI4ZTk3GAAgACgAMPfxldCpMziv85XQqTNAr/OV0KkzShxtQW01azhtMkdheGdRWmlwUVp1dFNBTlFtVk09Wh8iHaowb1ZDT3RhZFlVeTZRbDR6MGhNU1B5clkvcG89ZQAAAADCPgJgBRKOAQgCEokBChxZY1NUb252RVNQd3FDczRMMmNyVmh2NjhMOTg9EiRhMTM0OTZiNi0zN2JiLTUzNmQtODAwMi0zYzRhNmU4NTIyNDgYACAAKAAwws7T45gzOP3R0+OYM0D90dPjmDNKHG9QVmtod0JSYlY2NUtDV1IyK0lPTkhXb091OD1aAGUAAAAAwj4CYAASrAEIBxKnAQocT1JjWThVL1M4UHN1QnFhcFhPRjQzaVNTLzMwPRIkYTVlMDQ0OTEtODdiNS00NWVkLTg1YjgtYTYwMGI3NjJjNDYyGAAgACgAMP7Zv6CpMziB27+gqTNAgdu/oKkzShw3eUpCSXVYaTJINk04Qkg4TFNVZ0psbEY2Y289Wh4iHFRjVEtlckFiOVROT3l5RWRHS1dmZGs0Z0ZjRT1lAm/b1cI+AmAFEo4BCAESiQEKHHl4Si82ZnZrZWNyN2twNUVRekI0dFdMcGRiRT0SJDdiMjA0ZDM4LTk5MzEtNWU0MC1iZmNiLWU2M2Y3MTBiNTBiMRgAIAAoADDBztPjmDM439HT45gzQN/R0+OYM0ocYVJDV0xnaEY5YjVJbnFLSUR2dUovanZRa0ZjPVoAZQAAAADCPgJgADAAOAA=",
+   "version": 1
+}

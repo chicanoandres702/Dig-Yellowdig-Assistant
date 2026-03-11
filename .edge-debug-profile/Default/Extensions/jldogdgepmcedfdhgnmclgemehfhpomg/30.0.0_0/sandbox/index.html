@@ -1,0 +1,123 @@
+<!-- pages/sandbox/index.html -->
+<!DOCTYPE html>
+<html>
+
+<head>
+    <script>
+        // --- Conversion Utility To ToolOutput ---
+        function toToolOutput(data) {
+            if (data === null || data === undefined) {
+                return [];
+            }
+            if (Array.isArray(data)) {
+                return data.filter(item => item !== undefined && item !== null);
+            }
+            if (typeof data === 'object' || typeof data === 'string') {
+                return [data];
+            }
+            return [String(data)];
+        }
+
+        // Override fetch to proxy through the main extension
+        const originalFetch = window.fetch;
+        window.fetch = (...args) => {
+            return new Promise((resolve, reject) => {
+                const fetchId = crypto.randomUUID();
+
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'fetch',
+                        args,
+                        fetchId
+                    }, '*');
+                } else {
+                    reject(new Error("Cannot proxy fetch: No parent window access."));
+                    return;
+                }
+
+                const fetchResponseListener = (event) => {
+                    if (event.source === window.parent &&
+                        event.data.type === 'fetchResponse' &&
+                        event.data.fetchId === fetchId) {
+                        window.removeEventListener('message', fetchResponseListener);
+                        if (event.data.error) {
+                            reject(new Error(event.data.error));
+                        } else {
+                            const payload = event.data.payload || {};
+                            // Backward compatibility: older sender sent "response" as plain body string.
+                            const body = payload.body !== undefined ? payload.body : (event.data.response || '');
+                            const status = Number.isFinite(Number(payload.status)) ? Number(payload.status) : 200;
+                            const statusText = typeof payload.statusText === 'string' ? payload.statusText : '';
+                            const headers = payload.headers && typeof payload.headers === 'object' ? payload.headers : {};
+                            resolve(new Response(body, { status, statusText, headers }));
+                        }
+                    }
+                };
+                window.addEventListener('message', fetchResponseListener);
+            });
+        };
+
+        window.addEventListener('message', async (event) => {
+            // Ensure the message is from the direct parent and is of type 'execute'
+            if (event.source === window.parent && event.data.type === 'execute') {
+                const executionId = event.data.executionId; // Get execution ID
+                // Initialize results array with pre-calculated MCP results, if provided
+                const results = event.data.initialMcpResults ? [...event.data.initialMcpResults] : [];
+
+                // Execute sandboxed functions (event.data.functions)
+                for (const { functionCallArgs, code } of event.data.functions) {
+                    let consoleOutput = '';
+                    let error = null;
+                    let finalResult = null;
+                    const originalConsoleLog = console.log; // Store original console.log
+
+                    try {
+                        // Override console.log to capture output for this specific execution
+                        console.log = (...args) => {
+                            // Safely stringify, handle circular refs if necessary (though JSON.stringify is usually fine for simple args)
+                            try {
+                                consoleOutput += args.map(arg =>
+                                    typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+                                ).join(' ') + '\n';
+                            } catch (stringifyError) {
+                                consoleOutput += "Error stringifying console arguments.\n";
+                            }
+                            originalConsoleLog.apply(console, args); // Call original log too
+                        };
+                        const result = eval(code);
+                        finalResult = (result instanceof Promise) ? await result : result;
+                    } catch (e) {
+                        error = {
+                            name: e.name || 'ExecutionError',
+                            message: e.message || 'An error occurred in sandboxed code.',
+                            stack: e.stack,
+                        };
+                    } finally {
+                        console.log = originalConsoleLog; // Restore original console.log
+                        // *** CHANGE IS HERE: Convert the result to ToolOutput before pushing ***
+                        const toolOutputResult = toToolOutput(finalResult);
+                        results.push({
+                            functionCallArgs: functionCallArgs,
+                            result: toolOutputResult,
+                            consoleOutput: consoleOutput,
+                            error: error,
+                        });
+                    }
+                }
+                // Post all results (MCP + Sandboxed) back
+                if (event.source && event.source.postMessage) {
+                    event.source.postMessage({
+                        type: 'results',
+                        executionId: executionId, // Include execution ID
+                        results: results,
+                    }, '*');
+                }
+            }
+        });
+    </script>
+</head>
+
+<body>
+</body>
+
+</html>

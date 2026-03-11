@@ -1,0 +1,37 @@
+{
+   "action": {
+      "default_icon": {
+         "128": "icon-128.png",
+         "16": "icon-16.png",
+         "32": "icon-32.png",
+         "48": "icon-48.png"
+      },
+      "default_popup": "index.html",
+      "default_title": "Smart Cookie Editor"
+   },
+   "background": {
+      "service_worker": "background.js"
+   },
+   "content_scripts": [ {
+      "js": [ "content-script.js" ],
+      "matches": [ "\u003Call_urls>" ],
+      "run_at": "document_end"
+   } ],
+   "content_security_policy": {
+      "extension_pages": "script-src 'self'; object-src 'self';"
+   },
+   "description": "Professional cookie management with premium features",
+   "host_permissions": [ "\u003Call_urls>" ],
+   "icons": {
+      "128": "icon-128.png",
+      "16": "icon-16.png",
+      "32": "icon-32.png",
+      "48": "icon-48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiC6hp08Okobc8Jw/ommkF8ZDXFeHQExRP0oKytTp8QUk2ZTgLilKOs91gsnqX/FukMXMGEkTsyrhp13qQiQeRfRFE8QPIPWMgsIj49yyR09fZh4gotiCgrFHuI1DIN7cZBwB9jCY34zI5HvKeDxBz+Y+TsfVVtlKnufNohipKC0ZSLSG3Gs79DDQeHJDZMCMlI5n06bAUW//0QF3iIC22dlrOqUjwU1+148AdxbRvYJqqSSpha+cRPYZ+6Qh46UOwI9mbAFl5TOpEw+d6uYOBlxoWrOygO/tmBDp7yOUXlVxSwIlbF5E1xlJub+Gfj9zO06+Jw4gaF4K8VIp6pnHPwIDAQAB",
+   "manifest_version": 3,
+   "name": "Smart Cookie Editor",
+   "permissions": [ "cookies", "activeTab", "storage", "scripting" ],
+   "update_url": "https://edge.microsoft.com/extensionwebstorebase/v1/crx",
+   "version": "0.8.4"
+}
