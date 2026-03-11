@@ -16,7 +16,7 @@
     "128": "icon.png"
   },
   "side_panel": {
-    "default_path": "web-assistant.html"
+    "default_path": "dist/index.html"
   },
   "background": {
     "service_worker": "background.js",
@@ -62,7 +62,8 @@
   ],
   "web_accessible_resources": [
     {
-            "resources": [
+      "resources": [
+        "dist/index.html",
         "web-assistant.html",
         "topographic_waves.html",
         "icon.png",
