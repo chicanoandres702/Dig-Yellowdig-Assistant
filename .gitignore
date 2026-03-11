@@ -1,0 +1,33 @@
+# Node
+node_modules/
+
+# Prebuilt/frontend node modules
+prebuilt/frontend/node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.log
+
+# Environment variables
+.env
+.env.*
+prebuilt/frontend/.env.local
+prebuilt/frontend/.env*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+.vscode/
+.idea/
+
+# Build output (ignore frontend build in prebuilt folder; keep root `dist/` if you want the extension assets committed)
+prebuilt/frontend/dist/
+
+# Cache / coverage
+.cache/
+coverage/
+.vite/
