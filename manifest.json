@@ -68,15 +68,12 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "dist/index.html",
-        "topographic_waves.html",
-        "icon.png",
+        "dist/**",
+        "prebuilt/**",
+        "src/features/sidebar/**",
         "pdf.min.mjs",
         "pdf.js.worker.min.mjs",
-        "src/features/sidebar/sidebar-panel.service.js",
-        "src/features/sidebar/metadata-sniffer.js",
-        "dist/assets/index-DTZ5SE6V.js",
-        "dist/assets/index-DBhllpiR.css"
+        "icon.png"
       ],
       "matches": [
         "<all_urls>"
